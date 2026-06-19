@@ -1,7 +1,7 @@
 # Contributing to gwt
 
 Thanks for your interest. This document covers how to build, test, lint, and
-ship the project. The full architecture is in [PLAN.md](PLAN.md).
+ship the project.
 
 ## Prerequisites
 

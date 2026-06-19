@@ -8,9 +8,6 @@ A fast git worktree helper with a Charm TUI and `gh` integration. `gwt` keeps
 your worktrees tidy as siblings of the repo, gives you a live dashboard over all
 of them, and checks out GitHub PRs into fresh worktrees in one command.
 
-> Status: under construction. The design is settled and the build is underway.
-> See [PLAN.md](PLAN.md) for the architecture and roadmap.
-
 Worktrees default to a sibling of the repo (one level up), named
 `<repo>-<branch>` — so `gwt new feature` from `~/code/backend` creates
 `~/code/backend-feature`.
@@ -134,11 +131,11 @@ Hooks and setup commands come from the repo and are treated as untrusted: they
 run only with your consent (`auto_setup`, `--run-setup`/`--no-setup`, or an
 interactive prompt; skipped by default when there is no tty).
 
-## Documentation
+## Contributing
 
-The full design, command reference, and implementation roadmap live in
-[PLAN.md](PLAN.md). Contributions are welcome — see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The
+Homebrew tap and release setup is documented in
+[docs/homebrew-tap.md](docs/homebrew-tap.md).
 
 ## License
 
