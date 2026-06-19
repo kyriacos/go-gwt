@@ -1,47 +1,26 @@
 package tui
 
-import "strings"
-
-// renderPreview renders the right pane: the cached preview text for the
-// highlighted worktree (typically `git log --oneline --graph`), or a status
-// line while loading / on error.
+// renderPreview renders the right pane: a "Log" header plus the cached preview
+// text for the highlighted worktree (typically `git log --oneline --graph`), or
+// a status line while loading / on error. The caller (fitBlock) clips the
+// result to the pane's exact width x height, ANSI-aware, so it never wraps.
 func (m *model) renderPreview(width, height int) string {
 	st := m.styles
+	header := st.title.Render("Log") + "\n\n"
+
 	if m.preview == nil {
-		return st.dim.Render("preview disabled")
+		return header + st.dim.Render("preview disabled")
 	}
-	ri := m.currentRow()
-	if ri < 0 {
-		return st.dim.Render("no selection")
+	if m.currentRow() < 0 {
+		return header + st.dim.Render("no selection")
 	}
 
-	var body string
 	switch {
 	case m.previewErr != "":
-		body = st.errText.Render(m.previewErr)
+		return header + st.errText.Render(m.previewErr)
 	case m.previewText == "":
-		body = st.dim.Render(spinnerFrames[m.spinFrame%len(spinnerFrames)] + " loading preview…")
+		return header + st.dim.Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]+" loading preview…")
 	default:
-		body = m.previewText
+		return header + m.previewText
 	}
-
-	header := st.title.Render("Log")
-	return header + "\n\n" + clip(body, width, height-3)
-}
-
-// clip truncates body to fit width x lines (no wrapping; long lines are cut).
-func clip(body string, width, lines int) string {
-	if lines < 1 {
-		lines = 1
-	}
-	rows := strings.Split(body, "\n")
-	if len(rows) > lines {
-		rows = rows[:lines]
-	}
-	for i, r := range rows {
-		if width > 0 && len([]rune(r)) > width {
-			rows[i] = string([]rune(r)[:width])
-		}
-	}
-	return strings.Join(rows, "\n")
 }

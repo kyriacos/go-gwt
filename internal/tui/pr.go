@@ -58,7 +58,7 @@ func (m *model) renderPR(width, height int) string {
 		if i == m.prCursor {
 			full = st.rowSelected.Render(fmt.Sprintf("> #%-4d %s", pr.Number, pr.Title))
 		}
-		b.WriteString(clip(full, width, 1))
+		b.WriteString(truncVis(full, width))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")

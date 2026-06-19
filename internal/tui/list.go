@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/kyriacos/go-gwt/internal/git"
 )
 
@@ -57,38 +59,52 @@ func (m *model) moveCursor(delta int) {
 	}
 }
 
-// renderList renders the left pane: header + one line per filtered row.
-func (m *model) renderList(width int) string {
-	var b strings.Builder
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// renderList renders the left pane into a fixed height: a 2-line header
+// followed by a scrolling window of rows sized so the highlighted row is always
+// visible. Output is clipped to width x height by the caller (fitBlock).
+func (m *model) renderList(width, height int) string {
 	st := m.styles
+	var lines []string
 
 	header := fmt.Sprintf("Worktrees (%d)", len(m.rows))
 	if m.loading > 0 {
 		header += "  " + st.spinner.Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]+" loading")
 	}
-	b.WriteString(st.title.Render(header))
-	b.WriteString("\n\n")
+	lines = append(lines, st.title.Render(header), "")
 
 	if len(m.filtered) == 0 {
-		b.WriteString(st.dim.Render("  (no worktrees match)"))
-		return b.String()
+		lines = append(lines, st.dim.Render("(no worktrees match)"))
+		return strings.Join(lines, "\n")
 	}
 
-	for vi, ri := range m.filtered {
-		line := m.renderRow(m.rows[ri], vi == m.cursor, width)
-		b.WriteString(line)
-		if vi < len(m.filtered)-1 {
-			b.WriteString("\n")
-		}
+	// Scrolling window: keep the cursor visible within the available rows.
+	visN := height - 2 // minus the header + blank line
+	if visN < 1 {
+		visN = 1
 	}
-	return b.String()
+	start := 0
+	if m.cursor >= visN {
+		start = m.cursor - visN + 1
+	}
+	end := start + visN
+	if end > len(m.filtered) {
+		end = len(m.filtered)
+	}
+	for vi := start; vi < end; vi++ {
+		ri := m.filtered[vi]
+		lines = append(lines, m.renderRow(m.rows[ri], vi == m.cursor, width))
+	}
+	return strings.Join(lines, "\n")
 }
 
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
-// renderRow renders one worktree row:
+// renderRow renders exactly one line of the given visible width:
 //
-//   - repo-branch        ↑2 ↓0   ●  abc1234   12 MB
+//	> repo-branch              ↑2 ↓0 ● abc1234 12KB
+//
+// The meta cluster sits on the right; the name fills the remaining space and is
+// truncated with an ellipsis so the row can never wrap.
 func (m *model) renderRow(r row, selected bool, width int) string {
 	st := m.styles
 
@@ -97,43 +113,72 @@ func (m *model) renderRow(r row, selected bool, width int) string {
 		marker = "*"
 	}
 
-	// name colored by worktree state.
-	name := r.label()
-	var nameStyled string
-	switch {
-	case r.wt.Bare:
-		nameStyled = st.stateBare.Render(name + " (bare)")
-	case r.wt.Detached:
-		nameStyled = st.stateDetached.Render(name + " (detached)")
-	case r.wt.IsMain:
-		nameStyled = st.stateActive.Render(name)
-	case r.loaded && r.status.Upstream == "" && !r.wt.Detached:
-		nameStyled = st.stateLocalOnly.Render(name)
-	default:
-		nameStyled = name
-	}
-
-	// ahead/behind + dirty + sha + size, only once loaded.
 	var meta string
-	if r.loadErr != "" {
-		meta = st.errText.Render("status error")
-	} else if r.loaded {
+	switch {
+	case r.loadErr != "":
+		meta = "status error"
+	case r.loaded:
 		meta = m.renderMeta(r)
-	} else {
+	default:
 		meta = st.dim.Render(spinnerFrames[m.spinFrame%len(spinnerFrames)])
 	}
 
-	left := fmt.Sprintf("%s %s", st.marker.Render(marker), nameStyled)
-	line := fmt.Sprintf("%-40s %s", left, meta)
+	cursor := "  "
+	if selected {
+		cursor = "> "
+	}
+
+	// Width budget: cursor(2) + marker(1) + space(1) + name + space(1) + meta.
+	nameW := width - 5 - lipgloss.Width(meta)
+	if nameW < 3 {
+		nameW = 3
+	}
+	name := truncRunes(r.label(), nameW)
 
 	if selected {
-		// Render selection over the (possibly already-styled) label by
-		// re-styling the visible label portion; keep it simple: highlight the
-		// whole line.
-		plain := fmt.Sprintf("%s %-38s %s", marker, name, m.metaPlain(r))
-		return st.rowSelected.Render("> " + plain)
+		// A single highlight spans the whole row; per-segment color would be
+		// hidden under the selection background anyway.
+		plain := fmt.Sprintf("%s%s %-*s %s", cursor, marker, nameW, name, m.metaPlain(r))
+		return st.rowSelected.Render(padVis(plain, width))
 	}
-	return "  " + line
+
+	nameStyled := m.styleName(r, name)
+	gap := nameW - lipgloss.Width(nameStyled)
+	if gap < 0 {
+		gap = 0
+	}
+	line := cursor + st.marker.Render(marker) + " " + nameStyled +
+		strings.Repeat(" ", gap) + " " + meta
+	return padVis(line, width)
+}
+
+// styleName colors the worktree name by its state (mirrors the legacy tool).
+func (m *model) styleName(r row, name string) string {
+	st := m.styles
+	switch {
+	case r.wt.Bare:
+		return st.stateBare.Render(name)
+	case r.wt.Detached:
+		return st.stateDetached.Render(name)
+	case r.wt.IsMain:
+		return st.stateActive.Render(name)
+	case r.loaded && r.status.Upstream == "":
+		return st.stateLocalOnly.Render(name)
+	default:
+		return name
+	}
+}
+
+// truncRunes truncates s to w runes, using a trailing ellipsis when it cuts.
+func truncRunes(s string, w int) string {
+	rs := []rune(s)
+	if len(rs) <= w {
+		return s
+	}
+	if w <= 1 {
+		return string(rs[:w])
+	}
+	return string(rs[:w-1]) + "…"
 }
 
 // renderMeta builds the styled ahead/behind/dirty/sha/size cluster.

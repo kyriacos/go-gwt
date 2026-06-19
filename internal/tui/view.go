@@ -21,24 +21,37 @@ func (m *model) View() string {
 	}
 }
 
-// viewMain renders the list + preview split, the status line, help, and any
-// active overlay (filter box, prompt, confirm modal).
+// footerH is the fixed number of lines reserved below the panes (one status
+// line + one help/filter line). Keeping it constant — together with
+// fixed-height panes — is what stops the screen from jumping as the selection
+// or preview changes.
+const footerH = 2
+
+// viewMain renders the list + preview split plus a fixed-height footer. Panes
+// are sized to fill the viewport exactly and their content is clipped to that
+// size, so the layout never grows or shrinks with content.
 func (m *model) viewMain() string {
-	listW := m.width * 45 / 100
-	if listW < 30 {
-		listW = 30
-	}
-	prevW := m.width - listW - 6
-	if prevW < 20 {
-		prevW = 20
-	}
-	bodyH := m.height - 5
-	if bodyH < 5 {
-		bodyH = 5
+	// Inner content height of each pane (minus the 2 border rows), chosen so
+	// panes(border) + footer == terminal height, always.
+	innerH := m.height - footerH - 2
+	if innerH < 3 {
+		innerH = 3
 	}
 
-	left := m.styles.pane.Width(listW).Height(bodyH).Render(m.renderList(listW))
-	right := m.styles.previewPane.Width(prevW).Height(bodyH).Render(m.renderPreview(prevW, bodyH))
+	// Inner content widths. Each pane adds 2 columns of border; split the rest.
+	listW := m.width*45/100 - 2
+	if listW < 20 {
+		listW = 20
+	}
+	prevW := m.width - 4 - listW
+	if prevW < 16 {
+		prevW = 16
+	}
+
+	left := m.styles.pane.Width(listW).Height(innerH).
+		Render(fitBlock(m.renderList(listW, innerH), listW, innerH))
+	right := m.styles.previewPane.Width(prevW).Height(innerH).
+		Render(fitBlock(m.renderPreview(prevW, innerH), prevW, innerH))
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
 	var b strings.Builder
@@ -48,10 +61,8 @@ func (m *model) viewMain() string {
 
 	base := b.String()
 
-	// Overlays render below the footer for simplicity and testability.
+	// Prompt and confirm are modal overlays; they render below the fixed body.
 	switch m.mode {
-	case modeFilter:
-		base += "\n" + m.styles.prompt.Render("/"+m.filterText+"▌")
 	case modePrompt:
 		base += "\n" + m.viewPromptModal()
 	case modeConfirm:
@@ -60,14 +71,20 @@ func (m *model) viewMain() string {
 	return base
 }
 
+// footer renders exactly footerH lines: a status line (or blank) and either the
+// help bar or, in filter mode, the live filter input — so toggling filter does
+// not change the overall height.
 func (m *model) footer() string {
 	st := m.styles
-	var lines []string
+	status := ""
 	if m.statusMsg != "" {
-		lines = append(lines, st.warnText.Render(m.statusMsg))
+		status = st.warnText.Render(m.statusMsg)
 	}
-	lines = append(lines, m.keys.helpBar(st))
-	return strings.Join(lines, "\n")
+	second := m.keys.helpBar(st)
+	if m.mode == modeFilter {
+		second = st.prompt.Render("/" + m.filterText + "▌")
+	}
+	return status + "\n" + second
 }
 
 func (m *model) viewPromptModal() string {

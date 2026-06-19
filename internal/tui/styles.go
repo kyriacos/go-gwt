@@ -67,8 +67,8 @@ func newStyles() styles {
 		title:       lipgloss.NewStyle().Bold(true).Foreground(c("6")),
 		help:        lipgloss.NewStyle().Faint(true),
 		spinner:     lipgloss.NewStyle().Foreground(c("5")),
-		pane:        lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(c("8")).Padding(0, 1),
-		previewPane: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(c("8")).Padding(0, 1),
+		pane:        lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(c("8")),
+		previewPane: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(c("8")),
 
 		rowNormal:   lipgloss.NewStyle(),
 		rowSelected: lipgloss.NewStyle().Bold(true).Foreground(c("0")).Background(c("6")),

@@ -15,6 +15,14 @@ Worktrees default to a sibling of the repo (one level up), named
 `<repo>-<branch>` — so `gwt new feature` from `~/code/backend` creates
 `~/code/backend-feature`.
 
+## Demo
+
+![gwt demo](docs/demo/demo.gif)
+
+> The gif is generated with [VHS](https://github.com/charmbracelet/vhs) from
+> [`docs/demo/demo.tape`](docs/demo/demo.tape) — run `vhs docs/demo/demo.tape`
+> to regenerate it.
+
 ## Features
 
 - Sibling-by-default worktrees, named from a template (default `{repo}-{branch}`).
@@ -39,8 +47,34 @@ Homebrew (available once the first release is tagged):
 brew install kyriacos/tap/gwt
 ```
 
+Maintainers: the one-time tap and release setup is documented in
+[docs/homebrew-tap.md](docs/homebrew-tap.md).
+
 Prebuilt binaries for macOS and Linux (amd64/arm64) are attached to each
 [release](https://github.com/kyriacos/go-gwt/releases).
+
+### Build from source
+
+Requires Go 1.26+ and `git` at runtime (`gh` is optional, for the PR commands).
+
+```sh
+git clone https://github.com/kyriacos/go-gwt
+cd go-gwt
+go build -o gwt .          # produces ./gwt
+# or install into $GOBIN / $GOPATH/bin:
+go install .
+```
+
+Run the test suite and linters:
+
+```sh
+go test -race ./...
+go vet ./...
+golangci-lint run          # optional; see .golangci.yml
+```
+
+To cut a release build locally (matches CI), install
+[goreleaser](https://goreleaser.com) and run `goreleaser release --snapshot --clean`.
 
 ## Quickstart
 
