@@ -4,7 +4,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -22,14 +21,14 @@ var versionInfo struct {
 
 // deps bundles the assembled dependencies handed to command bodies.
 type deps struct {
-	repo *git.CmdRepo
-	ghc  gh.Client
-	cfg  config.Config
-	svc  *worktree.Service
+	runner exec.Runner
+	repo   *git.CmdRepo
+	ghc    gh.Client
+	cfg    config.Config
+	svc    *worktree.Service
 }
 
-// build assembles dependencies for a command run. The integration agent uses
-// this from each command's RunE.
+// build assembles dependencies for a command run.
 func build() (*deps, error) {
 	runner := exec.New()
 	repo := git.New(runner)
@@ -39,28 +38,56 @@ func build() (*deps, error) {
 		return nil, err
 	}
 	ghc := gh.New(runner)
-	svc := worktree.New(repo, ghc, cfg)
-	return &deps{repo: repo, ghc: ghc, cfg: cfg, svc: svc}, nil
+	svc := worktree.New(repo, ghc, cfg, runner)
+	return &deps{runner: runner, repo: repo, ghc: ghc, cfg: cfg, svc: svc}, nil
 }
 
-// NewRootCmd constructs the root command and its subcommands. Subcommand
-// bodies are filled in by the integration agent; the foundation registers
-// version and a placeholder so the tree compiles and --help works.
+// NewRootCmd constructs the root command and all subcommands.
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "gwt",
 		Short:         "git worktree helper with a TUI and gh integration",
+		Long:          "gwt manages git worktrees as siblings of the repo, with a live dashboard and gh PR checkout.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Apply the color policy before any command runs.
+		PersistentPreRun: func(c *cobra.Command, _ []string) {
+			switch v, _ := c.Flags().GetString("color"); v {
+			case "always":
+				ui.SetColor(ui.Always)
+			case "never":
+				ui.SetColor(ui.Never)
+			default:
+				ui.SetColor(ui.Auto)
+			}
+		},
+		// Bare `gwt` with a terminal opens the dashboard; otherwise help.
 		RunE: func(c *cobra.Command, args []string) error {
-			// Bare `gwt` will launch the dashboard (TUI agent). For now, help.
+			if len(args) == 0 && ui.HasTTY() {
+				return runDashboard()
+			}
 			return c.Help()
 		},
 	}
 
 	root.PersistentFlags().String("color", "auto", "color output: auto|always|never")
 
-	root.AddCommand(newVersionCmd())
+	root.AddCommand(
+		newNewCmd(),
+		newFromCmd(),
+		newCoCmd(),
+		newRmCmd(),
+		newPRCmd(),
+		newLsCmd(),
+		newSearchCmd(),
+		newCleanCmd(),
+		newPruneCmd(),
+		newPassthroughCmd("st", "git status (short) for the current worktree", []string{"status", "-sb"}),
+		newPassthroughCmd("log", "git log (oneline graph) for the current worktree", []string{"log", "--oneline", "--graph", "--decorate", "-n", "20"}),
+		newDashboardCmd(),
+		newShellInitCmd(),
+		newVersionCmd(),
+	)
 	return root
 }
 
@@ -79,7 +106,6 @@ func newVersionCmd() *cobra.Command {
 func Execute(version, commit, date string) {
 	versionInfo.version, versionInfo.commit, versionInfo.date = version, commit, date
 	if err := NewRootCmd().Execute(); err != nil {
-		ui.Err("%v", err)
-		os.Exit(1)
+		ui.Die("%v", err)
 	}
 }

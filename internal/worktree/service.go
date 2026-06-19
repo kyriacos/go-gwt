@@ -1,15 +1,41 @@
 // Package worktree holds the domain logic that sits above git/gh/config: it
 // resolves destination paths, applies the naming template, and orchestrates
 // create/remove flows with their safety checks. It depends only on the
-// git.Repo and gh.Client interfaces, so it is fully testable against fakes.
+// git.Repo and gh.Client interfaces (plus an exec.Runner and a *setup.Runner
+// for side effects), so it is fully testable against fakes.
+//
+// # Service shape (for the integration agent wiring cmd/)
+//
+// The constructor and field list are:
+//
+//	func New(repo git.Repo, ghc gh.Client, cfg config.Config, run exec.Runner) *Service
+//
+//	type Service struct {
+//	    Repo  git.Repo        // git porcelain surface
+//	    GH    gh.Client       // gh CLI surface (may be unavailable)
+//	    Cfg   config.Config   // fully-resolved config
+//	    Run   exec.Runner     // used to launch the editor / tmux
+//	    Setup *setup.Runner   // runs repo setup commands + lifecycle hooks
+//	}
+//
+// New constructs the *setup.Runner internally from (run, cfg). Pass the same
+// exec.Runner used elsewhere. A nil run is tolerated (editor/tmux/setup become
+// no-ops) so the zero-config path stays safe.
 package worktree
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/kyriacos/go-gwt/internal/config"
+	"github.com/kyriacos/go-gwt/internal/exec"
 	"github.com/kyriacos/go-gwt/internal/gh"
 	"github.com/kyriacos/go-gwt/internal/git"
+	"github.com/kyriacos/go-gwt/internal/setup"
+	"github.com/kyriacos/go-gwt/internal/ui"
 )
 
 // ErrNotImplemented is returned by stubs until the service is built.
@@ -17,14 +43,23 @@ var ErrNotImplemented = errors.New("worktree: not implemented")
 
 // Service orchestrates worktree operations.
 type Service struct {
-	Repo git.Repo
-	GH   gh.Client
-	Cfg  config.Config
+	Repo  git.Repo
+	GH    gh.Client
+	Cfg   config.Config
+	Run   exec.Runner
+	Setup *setup.Runner
 }
 
-// New builds a Service.
-func New(repo git.Repo, ghc gh.Client, cfg config.Config) *Service {
-	return &Service{Repo: repo, GH: ghc, Cfg: cfg}
+// New builds a Service. It wires a setup.Runner from run+cfg so create/remove
+// flows can execute repo setup commands and user hooks.
+func New(repo git.Repo, ghc gh.Client, cfg config.Config, run exec.Runner) *Service {
+	return &Service{
+		Repo:  repo,
+		GH:    ghc,
+		Cfg:   cfg,
+		Run:   run,
+		Setup: setup.New(run, cfg),
+	}
 }
 
 // CreateOpts drives New/From/PR creation.
@@ -46,6 +81,18 @@ const (
 	SetupNo
 )
 
+// decision maps a SetupMode to the setup package's Decision.
+func (m SetupMode) decision() setup.Decision {
+	switch m {
+	case SetupYes:
+		return setup.DecisionYes
+	case SetupNo:
+		return setup.DecisionNo
+	default:
+		return setup.DecisionDefault
+	}
+}
+
 // RemoveOpts drives removal.
 type RemoveOpts struct {
 	Target       string // name/branch; empty means the current worktree
@@ -61,24 +108,348 @@ type Result struct {
 }
 
 // Create makes a new worktree (new branch, existing branch, or PR checkout)
-// and returns its path. Implemented by the worktree-service agent.
-func (s *Service) Create(opts CreateOpts) (Result, error) { return Result{}, ErrNotImplemented }
+// and returns its path. PR checkout is handled by cmd (gh.Checkout then Create
+// with NewBranch=false), so Create only needs to add an existing branch when
+// NewBranch is false.
+func (s *Service) Create(opts CreateOpts) (Result, error) {
+	root, err := s.Repo.MainWorktree()
+	if err != nil {
+		return Result{}, fmt.Errorf("locate main worktree: %w", err)
+	}
+
+	dest, err := s.ResolveDest(opts.Name, opts.ParentDir)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if err := s.Repo.Add(git.AddOpts{
+		Path:      dest,
+		Branch:    opts.Name,
+		NewBranch: opts.NewBranch,
+		Base:      opts.Base,
+	}); err != nil {
+		return Result{}, fmt.Errorf("create worktree: %w", err)
+	}
+
+	ctx := context.Background()
+
+	// Lifecycle: user hooks first (trusted), then repo setup (consent-gated).
+	if s.Setup != nil {
+		if err := s.Setup.RunHooks(ctx, setup.PostCreate, dest, root); err != nil {
+			ui.Warn("post_create hooks: %v", err)
+		}
+		if err := s.Setup.RunSetup(ctx, dest, root, opts.SetupChoice.decision()); err != nil {
+			ui.Warn("setup: %v", err)
+		}
+	}
+
+	ui.OK("Created worktree for '%s' at %s", opts.Name, dest)
+
+	// Optional editor / tmux launch in the new worktree.
+	if opts.OpenEditor || s.Cfg.OpenEditor {
+		s.openEditor(ctx, dest)
+	}
+	if s.Cfg.Tmux {
+		s.openTmux(ctx, dest, opts.Name)
+	}
+
+	return Result{Path: dest, Branch: opts.Name}, nil
+}
 
 // Switch returns the path of the worktree matching name, creating it from an
-// existing branch if none exists (the `co` semantics).
+// existing branch if none exists (the `co` semantics). A match is any worktree
+// whose branch equals name or whose directory basename equals name.
 func (s *Service) Switch(name string, opts CreateOpts) (Result, error) {
-	return Result{}, ErrNotImplemented
+	wt, found, err := s.findWorktree(name)
+	if err != nil {
+		return Result{}, err
+	}
+	if found {
+		return Result{Path: wt.Path, Branch: wt.Branch}, nil
+	}
+
+	// No existing worktree: create one from the existing branch.
+	co := opts
+	co.Name = name
+	co.NewBranch = false
+	return s.Create(co)
 }
 
 // Remove deletes a worktree (and optionally its branch) after safety checks.
-func (s *Service) Remove(opts RemoveOpts) (Result, error) { return Result{}, ErrNotImplemented }
+func (s *Service) Remove(opts RemoveOpts) (Result, error) {
+	root, err := s.Repo.MainWorktree()
+	if err != nil {
+		return Result{}, fmt.Errorf("locate main worktree: %w", err)
+	}
+
+	// Resolve the target path.
+	var target string
+	if opts.Target != "" {
+		wt, found, ferr := s.findWorktree(opts.Target)
+		if ferr != nil {
+			return Result{}, ferr
+		}
+		if !found {
+			return Result{}, fmt.Errorf("no worktree matching %q (see `gwt ls`)", opts.Target)
+		}
+		target = wt.Path
+	} else {
+		target, err = s.Repo.Root()
+		if err != nil {
+			return Result{}, fmt.Errorf("locate current worktree: %w", err)
+		}
+	}
+
+	if sameDir(target, root) {
+		return Result{}, errors.New("refusing to remove the main worktree")
+	}
+
+	// Capture the branch BEFORE removal: the worktree disappears afterwards.
+	branch := s.branchForPath(target)
+
+	// Safety checks (skipped under Force).
+	if !opts.Force {
+		st, serr := s.Repo.Status(target)
+		if serr != nil {
+			return Result{}, fmt.Errorf("status %s: %w", target, serr)
+		}
+		if st.Dirty {
+			return Result{}, fmt.Errorf("worktree %s has uncommitted changes; commit/stash them or use -f", target)
+		}
+		if st.Unpushed() {
+			ui.Warn("Worktree %s has unpushed commits (%d ahead of %s).", target, st.Ahead, st.Upstream)
+			if !ui.Confirm("Remove anyway?", false) {
+				return Result{}, errors.New("aborted")
+			}
+		}
+	}
+
+	// pre_remove hooks run in the target before it goes away.
+	if s.Setup != nil {
+		if err := s.Setup.RunHooks(context.Background(), setup.PreRemove, target, root); err != nil {
+			ui.Warn("pre_remove hooks: %v", err)
+		}
+	}
+
+	if err := s.Repo.Remove(target, opts.Force); err != nil {
+		return Result{}, fmt.Errorf("remove worktree: %w", err)
+	}
+	ui.OK("Removed worktree %s", target)
+
+	// Branch handling.
+	switch {
+	case (opts.DeleteBranch || opts.ForceDelete) && branch != "":
+		if err := s.Repo.DeleteBranch(branch, opts.ForceDelete); err != nil {
+			if opts.ForceDelete {
+				ui.Warn("could not delete branch '%s': %v", branch, err)
+			} else {
+				ui.Warn("branch '%s' is not fully merged; not deleted. Use -D to force.", branch)
+			}
+		} else {
+			ui.OK("Deleted branch '%s'", branch)
+		}
+	case branch != "":
+		ui.Dim("Branch '%s' kept. Add -d (or -D to force) to delete it too next time.", branch)
+	}
+
+	return Result{Path: target, Branch: branch}, nil
+}
 
 // ResolveDest computes the destination directory for a branch name, applying
 // the parent-dir precedence and the naming template.
+//
+// Parent precedence (highest first): parentOverride > Cfg.WorktreeDir >
+// filepath.Dir(MainWorktree()). A relative parent is resolved against the
+// current working directory and created (MkdirAll) if missing, then
+// canonicalized. The resolved destination must NOT already exist; callers rely
+// on this to detect collisions.
 func (s *Service) ResolveDest(name, parentOverride string) (string, error) {
-	return "", ErrNotImplemented
+	root, err := s.Repo.MainWorktree()
+	if err != nil {
+		return "", fmt.Errorf("locate main worktree: %w", err)
+	}
+
+	parent := parentOverride
+	if parent == "" {
+		parent = s.Cfg.WorktreeDir
+	}
+	if parent == "" {
+		parent = filepath.Dir(root)
+	}
+
+	// Resolve a relative parent against the current working directory.
+	if !filepath.IsAbs(parent) {
+		cwd, cerr := os.Getwd()
+		if cerr != nil {
+			return "", fmt.Errorf("resolve relative parent: %w", cerr)
+		}
+		parent = filepath.Join(cwd, parent)
+	}
+
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return "", fmt.Errorf("create parent dir %s: %w", parent, err)
+	}
+	// Canonicalize (resolve symlinks, e.g. /tmp -> /private/tmp on macOS).
+	if resolved, rerr := filepath.EvalSymlinks(parent); rerr == nil {
+		parent = resolved
+	}
+
+	dirName := applyTemplate(s.Cfg.Naming, root, name)
+	dest := filepath.Join(parent, dirName)
+
+	if _, err := os.Stat(dest); err == nil {
+		return "", fmt.Errorf("destination already exists: %s", dest)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat destination %s: %w", dest, err)
+	}
+
+	return dest, nil
 }
 
 // CleanMerged removes worktrees whose branch is merged into the default branch.
 // When dryRun is true it reports candidates without removing anything.
-func (s *Service) CleanMerged(dryRun bool) ([]Result, error) { return nil, ErrNotImplemented }
+func (s *Service) CleanMerged(dryRun bool) ([]Result, error) {
+	def, err := s.Repo.DefaultBranch()
+	if err != nil {
+		return nil, fmt.Errorf("determine default branch: %w", err)
+	}
+
+	wts, err := s.Repo.List()
+	if err != nil {
+		return nil, fmt.Errorf("list worktrees: %w", err)
+	}
+
+	var candidates []git.Worktree
+	for _, wt := range wts {
+		if wt.IsMain || wt.Branch == "" || wt.Branch == def {
+			continue
+		}
+		merged, merr := s.Repo.IsMerged(wt.Branch, def)
+		if merr != nil {
+			ui.Warn("could not check merge status of '%s': %v", wt.Branch, merr)
+			continue
+		}
+		if merged {
+			candidates = append(candidates, wt)
+		}
+	}
+
+	if len(candidates) == 0 {
+		ui.Info("No merged worktrees to clean.")
+		return nil, nil
+	}
+
+	if dryRun {
+		ui.Info("Worktrees merged into '%s' (dry run, nothing removed):", def)
+		results := make([]Result, 0, len(candidates))
+		for _, wt := range candidates {
+			ui.Dim("  %s  (%s)", wt.Path, wt.Branch)
+			results = append(results, Result{Path: wt.Path, Branch: wt.Branch})
+		}
+		return results, nil
+	}
+
+	root, err := s.Repo.MainWorktree()
+	if err != nil {
+		return nil, fmt.Errorf("locate main worktree: %w", err)
+	}
+
+	ctx := context.Background()
+	results := make([]Result, 0, len(candidates))
+	for _, wt := range candidates {
+		if s.Setup != nil {
+			if err := s.Setup.RunHooks(ctx, setup.PreRemove, wt.Path, root); err != nil {
+				ui.Warn("pre_remove hooks: %v", err)
+			}
+		}
+		if err := s.Repo.Remove(wt.Path, false); err != nil {
+			ui.Warn("could not remove %s: %v", wt.Path, err)
+			continue
+		}
+		if err := s.Repo.DeleteBranch(wt.Branch, false); err != nil {
+			ui.Warn("removed %s but could not delete branch '%s': %v", wt.Path, wt.Branch, err)
+		}
+		ui.OK("Removed merged worktree %s (%s)", wt.Path, wt.Branch)
+		results = append(results, Result{Path: wt.Path, Branch: wt.Branch})
+	}
+	return results, nil
+}
+
+// findWorktree returns the worktree whose branch equals name or whose directory
+// basename equals name. found is false when no worktree matches.
+func (s *Service) findWorktree(name string) (git.Worktree, bool, error) {
+	wts, err := s.Repo.List()
+	if err != nil {
+		return git.Worktree{}, false, fmt.Errorf("list worktrees: %w", err)
+	}
+	for _, wt := range wts {
+		if wt.Branch == name || filepath.Base(wt.Path) == name || sameDir(wt.Path, name) {
+			return wt, true, nil
+		}
+	}
+	return git.Worktree{}, false, nil
+}
+
+// branchForPath returns the branch of the worktree at path, or "" when not
+// found or detached. Failures are treated as "no branch" rather than fatal.
+func (s *Service) branchForPath(path string) string {
+	wts, err := s.Repo.List()
+	if err != nil {
+		return ""
+	}
+	for _, wt := range wts {
+		if sameDir(wt.Path, path) {
+			return wt.Branch
+		}
+	}
+	return ""
+}
+
+// openEditor launches the configured editor (Cfg.Editor, else $EDITOR) in dir.
+func (s *Service) openEditor(ctx context.Context, dir string) {
+	if s.Run == nil {
+		return
+	}
+	editor := s.Cfg.Editor
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		ui.Dim("No editor configured (set config 'editor' or $EDITOR); skipping --open.")
+		return
+	}
+	if _, _, err := s.Run.Run(ctx, dir, editor, "."); err != nil {
+		ui.Warn("could not open editor '%s': %v", editor, err)
+	}
+}
+
+// openTmux opens a new tmux window rooted in dir, named after the branch.
+func (s *Service) openTmux(ctx context.Context, dir, name string) {
+	if s.Run == nil {
+		return
+	}
+	window := branchDir(name)
+	if _, _, err := s.Run.Run(ctx, dir, "tmux", "new-window", "-c", dir, "-n", window); err != nil {
+		ui.Warn("could not open tmux window: %v", err)
+	}
+}
+
+// sameDir reports whether two paths refer to the same directory after cleaning
+// and resolving symlinks where possible.
+func sameDir(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ca := filepath.Clean(a)
+	cb := filepath.Clean(b)
+	if ca == cb {
+		return true
+	}
+	if ra, err := filepath.EvalSymlinks(ca); err == nil {
+		ca = ra
+	}
+	if rb, err := filepath.EvalSymlinks(cb); err == nil {
+		cb = rb
+	}
+	return ca == cb
+}
