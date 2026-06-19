@@ -1,56 +1,84 @@
-# golangci-lint configuration. Intentionally lean: catch real bugs and keep
-# imports/formatting consistent without fighting the linter on style.
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - govet
-    - staticcheck
     - errcheck
+    - govet
     - ineffassign
-    - unused
-    - gofmt
-    - goimports
     - misspell
     - revive
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/kyriacos/go-gwt
-  gofmt:
-    simplify: true
-  misspell:
-    locale: US
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-      - shadow
-  revive:
-    # Light touch: a few high-signal rules, not the full ruleset.
+    - staticcheck
+    - unused
+  settings:
+    govet:
+      disable:
+        - fieldalignment
+        - shadow
+      enable-all: true
+    misspell:
+      locale: US
+      ignore-rules:
+        # GitHub's API spells this conclusion with two l's; keep it verbatim.
+        - cancelled
+    staticcheck:
+      checks:
+        - all
+        # Opinionated refactor hints (tagged switch / De Morgan), not bugs.
+        - -QF1001
+        - -QF1002
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: var-declaration
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: error-return
-      - name: error-strings
-      - name: errorf
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: range
-      - name: receiver-naming
-      - name: superfluous-else
-      - name: unreachable-code
-      - name: var-declaration
-
+      - linters:
+          - errcheck
+        path: _test\.go
+      # Tests deliberately reassign the model after each Update for a uniform
+      # step pattern; the final store is sometimes unread.
+      - linters:
+          - staticcheck
+        text: SA4006
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Test files exercise error paths deliberately; don't nag on unchecked
-    # errors there.
-    - path: _test\.go
-      linters:
-        - errcheck
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/kyriacos/go-gwt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

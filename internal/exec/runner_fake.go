@@ -35,7 +35,7 @@ func Key(name string, args ...string) string {
 }
 
 // Run implements Runner against the canned Responses.
-func (f *Fake) Run(_ context.Context, _ , name string, args ...string) ([]byte, []byte, error) {
+func (f *Fake) Run(_ context.Context, _, name string, args ...string) ([]byte, []byte, error) {
 	key := Key(name, args...)
 	f.Calls = append(f.Calls, key)
 	if r, ok := f.Responses[key]; ok {

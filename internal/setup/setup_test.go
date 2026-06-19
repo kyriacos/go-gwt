@@ -80,11 +80,7 @@ func fakeWithDefault() *exec.Fake {
 }
 
 func shCalls(f *exec.Fake) []string {
-	var out []string
-	for _, c := range f.Calls {
-		out = append(out, c)
-	}
-	return out
+	return append([]string(nil), f.Calls...)
 }
 
 func TestRunSetup_DecisionPrecedence(t *testing.T) {

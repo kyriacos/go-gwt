@@ -174,7 +174,7 @@ func (p *program) size() (int, int) {
 func (p *program) run() error {
 	if p.raw() {
 		if old, err := term.MakeRaw(int(p.tty.Fd())); err == nil {
-			defer term.Restore(int(p.tty.Fd()), old)
+			defer func() { _ = term.Restore(int(p.tty.Fd()), old) }()
 		}
 		fmt.Fprint(p.out, "\x1b[?1049h\x1b[?25l") // alt screen + hide cursor
 		defer fmt.Fprint(p.out, "\x1b[?25h\x1b[?1049l")

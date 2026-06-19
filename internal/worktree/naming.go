@@ -9,7 +9,7 @@ import (
 const defaultTemplate = "{repo}-{branch}"
 
 // applyTemplate renders the naming template for a branch, given the main
-// worktree path (used to derive {repo}). Recognised tokens:
+// worktree path (used to derive {repo}). Recognized tokens:
 //
 //	{repo}        basename of the main worktree
 //	{branch}      the branch name with '/' replaced by '-'

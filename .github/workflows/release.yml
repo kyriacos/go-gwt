@@ -31,13 +31,7 @@ jobs:
         env:
           # Used to create the GitHub Release on this repo. Provided automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Personal Access Token (fine-grained or classic) with `contents:write`
-          # on the kyriacos/homebrew-tap repository. The default GITHUB_TOKEN is
-          # scoped to THIS repo only and cannot push the Homebrew formula to the
-          # separate tap repo, so a cross-repo token is required.
-          #
-          # Setup:
-          #   1. Create the tap repo: kyriacos/homebrew-tap
-          #   2. Create a PAT with write access to that repo.
-          #   3. Add it here as a repository secret named HOMEBREW_TAP_TOKEN.
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # NOTE: Homebrew tap publishing is deferred (see issue #1).
+          # When re-enabled, add the goreleaser `brews:` block and a
+          # HOMEBREW_TAP_TOKEN secret (a PAT with contents:write on
+          # kyriacos/homebrew-tap) here.

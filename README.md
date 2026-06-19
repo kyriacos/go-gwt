@@ -38,15 +38,6 @@ Worktrees default to a sibling of the repo (one level up), named
 go install github.com/kyriacos/go-gwt@latest   # binary: gwt
 ```
 
-Homebrew (available once the first release is tagged):
-
-```sh
-brew install kyriacos/tap/gwt
-```
-
-Maintainers: the one-time tap and release setup is documented in
-[docs/homebrew-tap.md](docs/homebrew-tap.md).
-
 Prebuilt binaries for macOS and Linux (amd64/arm64) are attached to each
 [release](https://github.com/kyriacos/go-gwt/releases).
 
@@ -133,9 +124,7 @@ interactive prompt; skipped by default when there is no tty).
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The
-Homebrew tap and release setup is documented in
-[docs/homebrew-tap.md](docs/homebrew-tap.md).
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

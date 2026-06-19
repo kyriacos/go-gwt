@@ -57,25 +57,9 @@ changelog:
       - "Merge pull request"
       - "Merge branch"
 
-brews:
-  - name: gwt
-    repository:
-      owner: kyriacos
-      name: homebrew-tap
-      # Cross-repo push needs a PAT with `contents:write` on the tap repo,
-      # exposed to the release workflow as HOMEBREW_TAP_TOKEN.
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/kyriacos/go-gwt"
-    description: "Fast git worktree helper with a Charm TUI and gh integration"
-    license: "MIT"
-    commit_author:
-      name: goreleaser-bot
-      email: goreleaser-bot@users.noreply.github.com
-    test: |
-      system "#{bin}/gwt", "version"
-    install: |
-      bin.install "gwt"
+# Homebrew tap publishing is deferred — see issue #1. When ready, add
+# a `brews:` block here targeting kyriacos/homebrew-tap and wire the
+# HOMEBREW_TAP_TOKEN secret in .github/workflows/release.yml.
 
 release:
   github:
