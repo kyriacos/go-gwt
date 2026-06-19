@@ -71,6 +71,11 @@ func (m *model) Update(msg Msg) (Model, Cmd) {
 	case actionDoneMsg:
 		return m.handleActionDone(msg)
 
+	case windowSizeMsg:
+		m.width = msg.width
+		m.height = msg.height
+		return m, nil
+
 	case KeyMsg:
 		return m.handleKey(msg)
 	}

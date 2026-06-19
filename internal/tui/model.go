@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"io"
 	"os"
 	"runtime"
 
@@ -156,29 +157,25 @@ func concurrency() int {
 func Run(repo git.Repo, ghc gh.Client, acts Actions, preview PreviewFunc) (selectedPath string, err error) {
 	m := newModel(repo, ghc, acts, preview)
 
-	in := openInput()
-	if c, ok := in.(*os.File); ok && c != os.Stdin {
-		defer c.Close()
+	// Prefer the controlling terminal (opened read/write) so the dashboard works
+	// even when stdin/stdout are redirected — and so we can put it in raw mode
+	// and read its real size. Fall back to os.Stdin when there is no tty.
+	var tty *os.File
+	if f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+		tty = f
+		defer tty.Close()
+	}
+	var in io.Reader = os.Stdin
+	if tty != nil {
+		in = tty
 	}
 
-	p := newProgram(m, in, os.Stderr)
+	p := newProgram(m, in, os.Stderr, tty)
 	if err := p.run(); err != nil {
 		return "", err
 	}
-	// p.model is the final model.
 	if fm, ok := p.model.(*model); ok {
 		return fm.selectedPath, nil
 	}
 	return "", nil
-}
-
-// openInput prefers the controlling terminal so the dashboard works even when
-// stdin is redirected; it falls back to os.Stdin.
-func openInput() interface {
-	Read([]byte) (int, error)
-} {
-	if tty, err := os.Open("/dev/tty"); err == nil {
-		return tty
-	}
-	return os.Stdin
 }
