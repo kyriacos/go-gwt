@@ -1,0 +1,35 @@
+// Package exec is the single place that shells out to external programs.
+// Everything that runs git or gh goes through a Runner so it can be faked in
+// tests. The real runner is a thin wrapper over os/exec.
+package exec
+
+import (
+	"bytes"
+	"context"
+	osexec "os/exec"
+)
+
+// Runner executes a command in dir and returns its stdout and stderr. A nil or
+// empty dir runs in the current working directory. err is the exec error
+// (including non-zero exit, as *exec.ExitError); callers decide whether stderr
+// content matters.
+type Runner interface {
+	Run(ctx context.Context, dir, name string, args ...string) (stdout, stderr []byte, err error)
+}
+
+// Cmd is the production Runner backed by os/exec.
+type Cmd struct{}
+
+// New returns a Runner that executes real commands.
+func New() Runner { return Cmd{} }
+
+// Run implements Runner.
+func (Cmd) Run(ctx context.Context, dir, name string, args ...string) ([]byte, []byte, error) {
+	c := osexec.CommandContext(ctx, name, args...)
+	c.Dir = dir
+	var out, errb bytes.Buffer
+	c.Stdout = &out
+	c.Stderr = &errb
+	err := c.Run()
+	return out.Bytes(), errb.Bytes(), err
+}

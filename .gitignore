@@ -1,0 +1,13 @@
+# Binaries
+/gwt
+/dist/
+*.exe
+
+# Test artifacts
+*.out
+coverage.txt
+
+# Editor
+.idea/
+.vscode/
+.DS_Store
