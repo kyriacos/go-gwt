@@ -53,6 +53,8 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        # v8 targets golangci-lint v2 (our .golangci.yml uses the v2 schema);
+        # v6 installs v1, which rejects a v2 config.
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
