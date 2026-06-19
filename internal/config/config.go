@@ -66,9 +66,4 @@ func Defaults() Config {
 	}
 }
 
-// Load resolves configuration. repoRoot is the main worktree path (used to find
-// a repo-local .gwt.toml); pass "" if unknown. The config-layer agent
-// implements the precedence chain; the foundation returns defaults.
-func Load(repoRoot string) (Config, error) {
-	return Defaults(), nil
-}
+// Load is implemented in load.go.

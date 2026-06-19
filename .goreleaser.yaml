@@ -1,0 +1,84 @@
+# goreleaser configuration (v2 schema). Run locally with `goreleaser check`.
+# Release is driven by pushing a tag matching `v*`; see
+# .github/workflows/release.yml.
+version: 2
+
+project_name: gwt
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: gwt
+    main: .
+    binary: gwt
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    # main.go declares `version`, `commit`, and `date` package vars; inject them.
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - id: gwt
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+      # TODO: once the binary can emit man pages and shell completions at build
+      # time (e.g. `gwt man` / `gwt completion <shell>`), generate them in a
+      # build hook and add them here so archives ship docs + completions.
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+brews:
+  - name: gwt
+    repository:
+      owner: kyriacos
+      name: homebrew-tap
+      # Cross-repo push needs a PAT with `contents:write` on the tap repo,
+      # exposed to the release workflow as HOMEBREW_TAP_TOKEN.
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/kyriacos/go-gwt"
+    description: "Fast git worktree helper with a Charm TUI and gh integration"
+    license: "MIT"
+    commit_author:
+      name: goreleaser-bot
+      email: goreleaser-bot@users.noreply.github.com
+    test: |
+      system "#{bin}/gwt", "version"
+    install: |
+      bin.install "gwt"
+
+release:
+  github:
+    owner: kyriacos
+    name: go-gwt
+  prerelease: auto

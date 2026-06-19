@@ -28,18 +28,8 @@ func (r *CmdRepo) WithContext(ctx context.Context) *CmdRepo {
 	return &c
 }
 
-func (r *CmdRepo) Root() (string, error)               { return "", ErrNotImplemented }
-func (r *CmdRepo) MainWorktree() (string, error)       { return "", ErrNotImplemented }
-func (r *CmdRepo) List() ([]Worktree, error)           { return nil, ErrNotImplemented }
-func (r *CmdRepo) Add(opts AddOpts) error              { return ErrNotImplemented }
-func (r *CmdRepo) Remove(path string, force bool) error { return ErrNotImplemented }
-func (r *CmdRepo) Prune() error                        { return ErrNotImplemented }
-func (r *CmdRepo) Status(path string) (Status, error)  { return Status{}, ErrNotImplemented }
-func (r *CmdRepo) BranchExists(name string) (bool, error) { return false, ErrNotImplemented }
-func (r *CmdRepo) DeleteBranch(name string, force bool) error { return ErrNotImplemented }
-func (r *CmdRepo) IsMerged(branch, into string) (bool, error) { return false, ErrNotImplemented }
-func (r *CmdRepo) DefaultBranch() (string, error)      { return "", ErrNotImplemented }
-func (r *CmdRepo) DiskUsage(path string) (int64, error) { return 0, ErrNotImplemented }
+// The Repo methods are implemented across worktree.go, branch.go, status.go,
+// and parse.go.
 
 // compile-time check that CmdRepo satisfies Repo.
 var _ Repo = (*CmdRepo)(nil)

@@ -1,0 +1,56 @@
+# golangci-lint configuration. Intentionally lean: catch real bugs and keep
+# imports/formatting consistent without fighting the linter on style.
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/kyriacos/go-gwt
+  gofmt:
+    simplify: true
+  misspell:
+    locale: US
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+      - shadow
+  revive:
+    # Light touch: a few high-signal rules, not the full ruleset.
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: range
+      - name: receiver-naming
+      - name: superfluous-else
+      - name: unreachable-code
+      - name: var-declaration
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # Test files exercise error paths deliberately; don't nag on unchecked
+    # errors there.
+    - path: _test\.go
+      linters:
+        - errcheck

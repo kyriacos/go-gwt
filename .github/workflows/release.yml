@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # goreleaser needs full history (and tags) to build the changelog.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          # Used to create the GitHub Release on this repo. Provided automatically.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Personal Access Token (fine-grained or classic) with `contents:write`
+          # on the kyriacos/homebrew-tap repository. The default GITHUB_TOKEN is
+          # scoped to THIS repo only and cannot push the Homebrew formula to the
+          # separate tap repo, so a cross-repo token is required.
+          #
+          # Setup:
+          #   1. Create the tap repo: kyriacos/homebrew-tap
+          #   2. Create a PAT with write access to that repo.
+          #   3. Add it here as a repository secret named HOMEBREW_TAP_TOKEN.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

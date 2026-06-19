@@ -6,6 +6,8 @@ package gh
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/kyriacos/go-gwt/internal/exec"
 )
@@ -52,11 +54,18 @@ type Client interface {
 	Checks(branch string) (CIStatus, error)
 }
 
-// CmdClient implements Client over the gh CLI. Methods are stubbed in the
-// foundation; the gh-layer agent implements them.
+// availability caches the result of the gh auth check for the process lifetime.
+type availability struct {
+	checked bool
+	ok      bool
+}
+
+// CmdClient implements Client over the gh CLI.
 type CmdClient struct {
 	run exec.Runner
 	ctx context.Context
+
+	avail availability
 }
 
 // New returns a CmdClient backed by the given runner.
@@ -64,9 +73,37 @@ func New(r exec.Runner) *CmdClient {
 	return &CmdClient{run: r, ctx: context.Background()}
 }
 
-func (c *CmdClient) Available() bool                  { return false }
-func (c *CmdClient) ListPRs() ([]PR, error)           { return nil, ErrNotImplemented }
-func (c *CmdClient) Checkout(pr int) (string, error)  { return "", ErrNotImplemented }
-func (c *CmdClient) Checks(branch string) (CIStatus, error) { return CIStatus{}, ErrNotImplemented }
+// Available reports whether the gh binary is present AND authenticated. The
+// result is cached on the struct for the process lifetime so repeated calls do
+// not re-shell out. It never panics; any error yields false.
+//
+// Authentication is probed with `gh auth status`, which exits non-zero when gh
+// is missing or the user is not logged in.
+func (c *CmdClient) Available() bool {
+	if c.avail.checked {
+		return c.avail.ok
+	}
+	c.avail.checked = true
+	_, _, err := c.run.Run(c.ctx, "", "gh", "auth", "status")
+	c.avail.ok = err == nil
+	return c.avail.ok
+}
+
+// runGH execs gh with the given args. It returns the trimmed stdout, or an
+// error that wraps gh's stderr for context.
+func (c *CmdClient) runGH(args ...string) ([]byte, error) {
+	stdout, stderr, err := c.run.Run(c.ctx, "", "gh", args...)
+	if err != nil {
+		msg := strings.TrimSpace(string(stderr))
+		if msg == "" {
+			msg = strings.TrimSpace(string(stdout))
+		}
+		if msg != "" {
+			return nil, fmt.Errorf("gh %s: %w: %s", strings.Join(args, " "), err, msg)
+		}
+		return nil, fmt.Errorf("gh %s: %w", strings.Join(args, " "), err)
+	}
+	return stdout, nil
+}
 
 var _ Client = (*CmdClient)(nil)
