@@ -13,7 +13,7 @@
 # Install with:  gwt shell-init fish | source
 function gwt
     switch "$argv[1]"
-        case new from co checkout search pick ''
+        case new from co checkout search pick dashboard ''
             set -l out (command gwt $argv)
             or return
             if test -z "$out"

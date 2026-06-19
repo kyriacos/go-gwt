@@ -13,7 +13,7 @@
 # Install with:  eval "$(gwt shell-init zsh)"
 gwt() {
   case "$1" in
-    new|from|co|checkout|search|pick)
+    new|from|co|checkout|search|pick|dashboard)
       local out
       out="$(command gwt "$@")" || return
       if [[ -z "$out" ]]; then
