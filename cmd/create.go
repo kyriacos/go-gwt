@@ -1,11 +1,42 @@
 package cmd
 
 import (
+	"sort"
+
 	"github.com/spf13/cobra"
 
+	"github.com/kyriacos/go-gwt/internal/tui"
 	"github.com/kyriacos/go-gwt/internal/ui"
 	"github.com/kyriacos/go-gwt/internal/worktree"
 )
+
+// branchArg returns the branch from args, or opens the interactive picker when
+// no argument was given. Returns "" when the picker is cancelled.
+func branchArg(d *deps, args []string) (string, error) {
+	if len(args) >= 1 {
+		return args[0], nil
+	}
+	return pickBranch(d)
+}
+
+// pickBranch opens the interactive branch picker (used by from/co with no
+// argument). Returns "" if the user cancels.
+func pickBranch(d *deps) (string, error) {
+	states, err := d.repo.BranchStates()
+	if err != nil {
+		return "", err
+	}
+	names := make([]string, 0, len(states))
+	for n := range states {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	items := make([]tui.BranchItem, len(names))
+	for i, n := range names {
+		items[i] = tui.BranchItem{Name: n, State: states[n]}
+	}
+	return tui.PickBranch(items)
+}
 
 // createFlags are the options shared by new/from/co/pr.
 type createFlags struct {
@@ -74,15 +105,19 @@ func newNewCmd() *cobra.Command {
 func newFromCmd() *cobra.Command {
 	var f createFlags
 	c := &cobra.Command{
-		Use:   "from <branch>",
-		Short: "Create a worktree for an existing branch",
-		Args:  cobra.ExactArgs(1),
+		Use:   "from [branch]",
+		Short: "Create a worktree for an existing branch (no arg opens a picker)",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := build()
 			if err != nil {
 				return err
 			}
-			res, err := d.svc.Create(f.createOpts(args[0], "", false))
+			branch, err := branchArg(d, args)
+			if err != nil || branch == "" {
+				return err
+			}
+			res, err := d.svc.Create(f.createOpts(branch, "", false))
 			if err != nil {
 				return err
 			}
@@ -97,16 +132,20 @@ func newFromCmd() *cobra.Command {
 func newCoCmd() *cobra.Command {
 	var f createFlags
 	c := &cobra.Command{
-		Use:     "co <name>",
+		Use:     "co [name]",
 		Aliases: []string{"checkout"},
-		Short:   "Switch to a worktree, creating it from a branch if needed",
-		Args:    cobra.ExactArgs(1),
+		Short:   "Switch to a worktree, creating it from a branch if needed (no arg opens a picker)",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := build()
 			if err != nil {
 				return err
 			}
-			res, err := d.svc.Switch(args[0], f.createOpts(args[0], "", false))
+			name, err := branchArg(d, args)
+			if err != nil || name == "" {
+				return err
+			}
+			res, err := d.svc.Switch(name, f.createOpts(name, "", false))
 			if err != nil {
 				return err
 			}

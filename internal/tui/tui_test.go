@@ -30,11 +30,12 @@ func (f *fakeRepo) Status(p string) (git.Status, error) {
 	}
 	return git.Status{}, nil
 }
-func (f *fakeRepo) BranchExists(string) (bool, error)     { return true, nil }
-func (f *fakeRepo) DeleteBranch(string, bool) error       { return nil }
-func (f *fakeRepo) IsMerged(string, string) (bool, error) { return false, nil }
-func (f *fakeRepo) DefaultBranch() (string, error)        { return "main", nil }
-func (f *fakeRepo) DiskUsage(p string) (int64, error)     { return f.sizes[p], nil }
+func (f *fakeRepo) BranchExists(string) (bool, error)        { return true, nil }
+func (f *fakeRepo) BranchStates() (map[string]string, error) { return nil, nil }
+func (f *fakeRepo) DeleteBranch(string, bool) error          { return nil }
+func (f *fakeRepo) IsMerged(string, string) (bool, error)    { return false, nil }
+func (f *fakeRepo) DefaultBranch() (string, error)           { return "main", nil }
+func (f *fakeRepo) DiskUsage(p string) (int64, error)        { return f.sizes[p], nil }
 
 type fakeGH struct {
 	avail bool

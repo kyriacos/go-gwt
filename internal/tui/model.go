@@ -155,11 +155,22 @@ func concurrency() int {
 // back to os.Stdin), because stdout is reserved for the selected path under the
 // cd protocol. The caller prints the returned path to stdout on success.
 func Run(repo git.Repo, ghc gh.Client, acts Actions, preview PreviewFunc) (selectedPath string, err error) {
-	m := newModel(repo, ghc, acts, preview)
+	final, err := runModel(newModel(repo, ghc, acts, preview))
+	if err != nil {
+		return "", err
+	}
+	if fm, ok := final.(*model); ok {
+		return fm.selectedPath, nil
+	}
+	return "", nil
+}
 
-	// Prefer the controlling terminal (opened read/write) so the dashboard works
-	// even when stdin/stdout are redirected — and so we can put it in raw mode
-	// and read its real size. Fall back to os.Stdin when there is no tty.
+// runModel drives any Model to completion on the controlling terminal and
+// returns the final model. It prefers /dev/tty (so it works even when
+// stdin/stdout are redirected and so it can enter raw mode and read the real
+// size), falling back to os.Stdin. Rendering goes to stderr; stdout is reserved
+// for machine output (the chosen path) under the cd protocol.
+func runModel(m Model) (Model, error) {
 	var tty *os.File
 	if f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
 		tty = f
@@ -169,13 +180,9 @@ func Run(repo git.Repo, ghc gh.Client, acts Actions, preview PreviewFunc) (selec
 	if tty != nil {
 		in = tty
 	}
-
 	p := newProgram(m, in, os.Stderr, tty)
 	if err := p.run(); err != nil {
-		return "", err
+		return nil, err
 	}
-	if fm, ok := p.model.(*model); ok {
-		return fm.selectedPath, nil
-	}
-	return "", nil
+	return p.model, nil
 }

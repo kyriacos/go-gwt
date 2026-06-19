@@ -60,6 +60,8 @@ func parseWorktreeList(out string) []Worktree {
 			cur.Bare = true
 		case line == "detached":
 			cur.Detached = true
+		case line == "prunable" || strings.HasPrefix(line, "prunable "):
+			cur.Prunable = true
 		}
 	}
 	flush()

@@ -11,10 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	errGHUnavailable    = errors.New("gh is not available (install it and run `gh auth login`)")
-	errCleanNeedsMerged = errors.New("clean requires --merged (the only supported strategy for now)")
-)
+var errGHUnavailable = errors.New("gh is not available (install it and run `gh auth login`)")
 
 func parsePRNumber(s string) (int, error) {
 	n, err := strconv.Atoi(strings.TrimPrefix(s, "#"))

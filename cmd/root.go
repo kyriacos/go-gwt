@@ -70,7 +70,7 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
-	root.PersistentFlags().String("color", "auto", "color output: auto|always|never")
+	root.PersistentFlags().String("color", "always", "color output: auto|always|never")
 
 	root.AddCommand(
 		newNewCmd(),

@@ -17,6 +17,7 @@ type Worktree struct {
 	Head     string // short sha
 	Bare     bool
 	Detached bool
+	Prunable bool // git marked it prunable (gitdir missing)
 	IsMain   bool // first entry of the list
 }
 
@@ -53,6 +54,7 @@ type Repo interface {
 	Prune() error
 	Status(path string) (Status, error)
 	BranchExists(name string) (bool, error)
+	BranchStates() (map[string]string, error) // branch -> active|local|gone
 	DeleteBranch(name string, force bool) error
 	IsMerged(branch, into string) (bool, error)
 	DefaultBranch() (string, error) // e.g. main/master via origin/HEAD

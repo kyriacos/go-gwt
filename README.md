@@ -23,12 +23,16 @@ Worktrees default to a sibling of the repo (one level up), named
 ## Features
 
 - Sibling-by-default worktrees, named from a template (default `{repo}-{branch}`).
+- Color-coded worktree **states** in `ls`: active, local-only, gone (upstream
+  deleted), missing, detached — with a legend when anything is stale.
 - A live Bubble Tea dashboard: every worktree with concurrent git status
   (branch, ahead/behind, dirty, last commit, disk size) and inline actions.
+- Interactive pickers: `from`/`co` with no argument open a branch picker; `clean`
+  opens a multi-select list with stale worktrees pre-marked.
 - `gh` integration: check out a PR into a new worktree; see PR and CI status.
 - Safety checks: warns before removing a worktree with uncommitted or unpushed
   work, and refuses to remove the main worktree.
-- `clean --merged`: bulk-remove worktrees whose branch is already merged.
+- `clean`: multi-select removal of worktrees (`--merged` for a non-interactive sweep).
 - TOML config with a clear precedence chain and repo-local overrides.
 - Post-create / pre-remove hooks, plus optional editor and tmux launch on create.
 

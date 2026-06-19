@@ -55,7 +55,8 @@ func (f *fakeRepo) Status(path string) (git.Status, error) {
 	}
 	return f.statuses[path], nil
 }
-func (f *fakeRepo) BranchExists(name string) (bool, error) { return true, nil }
+func (f *fakeRepo) BranchExists(name string) (bool, error)   { return true, nil }
+func (f *fakeRepo) BranchStates() (map[string]string, error) { return nil, nil }
 func (f *fakeRepo) DeleteBranch(name string, force bool) error {
 	f.delBranch = append(f.delBranch, delCall{name, force})
 	return nil
