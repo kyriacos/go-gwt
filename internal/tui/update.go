@@ -180,11 +180,16 @@ func (m *model) handleListKey(k KeyMsg) (Model, Cmd) {
 		return m, loadPRs(m.ghc)
 
 	case m.keys.open.matches(s):
-		// Open in editor is delegated to the caller via an Action only if one
-		// exists; with the minimal Actions set we surface the path on the status
-		// line. The integration agent may wire an Open(path) action if desired.
+		// Launch the editor in the highlighted worktree, off the update loop.
 		if ri := m.currentRow(); ri >= 0 {
-			m.statusMsg = "open: " + m.rows[ri].wt.Path
+			p := m.rows[ri].wt.Path
+			m.statusMsg = "opening " + p + " …"
+			return m, func() Msg {
+				if err := m.acts.Open(p); err != nil {
+					return actionDoneMsg{verb: "open", err: err}
+				}
+				return actionDoneMsg{verb: "open", msg: "opened " + p}
+			}
 		}
 		return m, nil
 

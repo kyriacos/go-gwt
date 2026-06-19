@@ -28,7 +28,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/kyriacos/go-gwt/internal/config"
 	"github.com/kyriacos/go-gwt/internal/exec"
@@ -405,21 +407,37 @@ func (s *Service) branchForPath(path string) string {
 	return ""
 }
 
-// openEditor launches the configured editor (Cfg.Editor, else $EDITOR) in dir.
-func (s *Service) openEditor(ctx context.Context, dir string) {
-	if s.Run == nil {
-		return
-	}
+// OpenEditor launches the configured editor in dir, detached so it does not
+// block (works best with GUI editors like code/cursor). The editor is resolved
+// from Cfg.Editor, then $EDITOR, then $VISUAL. Returns an error if none is set
+// or the process fails to start.
+func (s *Service) OpenEditor(dir string) error {
 	editor := s.Cfg.Editor
 	if editor == "" {
 		editor = os.Getenv("EDITOR")
 	}
 	if editor == "" {
-		ui.Dim("No editor configured (set config 'editor' or $EDITOR); skipping --open.")
-		return
+		editor = os.Getenv("VISUAL")
 	}
-	if _, _, err := s.Run.Run(ctx, dir, editor, "."); err != nil {
-		ui.Warn("could not open editor '%s': %v", editor, err)
+	if editor == "" {
+		return errors.New("no editor configured (set 'editor' in config or $EDITOR)")
+	}
+	fields := strings.Fields(editor)
+	c := osexec.Command(fields[0], append(fields[1:], ".")...)
+	c.Dir = dir
+	// Detached: nil std streams connect to the null device so the editor does
+	// not draw over the TUI; Start returns immediately.
+	if err := c.Start(); err != nil {
+		return fmt.Errorf("open editor %q: %w", editor, err)
+	}
+	return nil
+}
+
+// openEditor is the create-flow wrapper: it opens the editor and reports any
+// problem without failing the create.
+func (s *Service) openEditor(_ context.Context, dir string) {
+	if err := s.OpenEditor(dir); err != nil {
+		ui.Dim("skipping --open: %v", err)
 	}
 }
 

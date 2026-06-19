@@ -40,6 +40,10 @@ func (a tuiActions) CleanMerged(dryRun bool) ([]string, error) {
 	return paths, nil
 }
 
+func (a tuiActions) Open(path string) error {
+	return a.svc.OpenEditor(path)
+}
+
 func (a tuiActions) CheckoutPR(number int) (string, error) {
 	branch, err := a.ghc.Checkout(number)
 	if err != nil {

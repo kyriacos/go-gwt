@@ -55,6 +55,7 @@ type fakeActions struct {
 	removed    []string
 	removedDel []bool
 	prCheckout []int
+	opened     []string
 }
 
 func (a *fakeActions) Create(name string, newBranch bool) (string, error) {
@@ -71,6 +72,12 @@ func (a *fakeActions) Remove(target string, deleteBranch, force bool) error {
 	return nil
 }
 func (a *fakeActions) CleanMerged(bool) ([]string, error) { return nil, nil }
+func (a *fakeActions) Open(path string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.opened = append(a.opened, path)
+	return nil
+}
 func (a *fakeActions) CheckoutPR(n int) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

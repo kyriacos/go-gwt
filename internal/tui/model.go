@@ -33,6 +33,7 @@ type Actions interface {
 	Remove(target string, deleteBranch, force bool) error
 	CleanMerged(dryRun bool) ([]string, error)
 	CheckoutPR(number int) (path string, err error)
+	Open(path string) error // launch the editor in the worktree
 }
 
 // PreviewFunc returns the preview text for the worktree at path, typically
