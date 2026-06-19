@@ -8,7 +8,7 @@ import (
 func TestInitSupportedShells(t *testing.T) {
 	for _, sh := range Shells() {
 		t.Run(sh, func(t *testing.T) {
-			script, err := Init(sh)
+			script, err := Init(sh, "gwt")
 			if err != nil {
 				t.Fatalf("Init(%q) returned error: %v", sh, err)
 			}
@@ -38,7 +38,7 @@ func TestInitDefinesFunction(t *testing.T) {
 		"fish": "function gwt",
 	}
 	for sh, want := range cases {
-		script, err := Init(sh)
+		script, err := Init(sh, "gwt")
 		if err != nil {
 			t.Fatalf("Init(%q): %v", sh, err)
 		}
@@ -49,11 +49,31 @@ func TestInitDefinesFunction(t *testing.T) {
 }
 
 func TestInitUnknownShell(t *testing.T) {
-	if _, err := Init("powershell"); err == nil {
+	if _, err := Init("powershell", "gwt"); err == nil {
 		t.Fatal("Init(\"powershell\") expected an error, got nil")
 	}
-	if _, err := Init(""); err == nil {
+	if _, err := Init("", "gwt"); err == nil {
 		t.Fatal("Init(\"\") expected an error, got nil")
+	}
+}
+
+func TestInitCustomName(t *testing.T) {
+	wantFn := map[string]string{"zsh": "gogwt() {", "bash": "gogwt() {", "fish": "function gogwt"}
+	for _, sh := range Shells() {
+		script, err := Init(sh, "gogwt")
+		if err != nil {
+			t.Fatalf("Init(%q, gogwt): %v", sh, err)
+		}
+		if !strings.Contains(script, wantFn[sh]) {
+			t.Errorf("Init(%q, gogwt) missing renamed function %q", sh, wantFn[sh])
+		}
+		if !strings.Contains(script, "command gogwt") {
+			t.Errorf("Init(%q, gogwt) does not invoke `command gogwt`", sh)
+		}
+		// The GWT_POPULATE sentinel is uppercase and must survive the rename.
+		if !strings.Contains(script, "GWT_POPULATE:") {
+			t.Errorf("Init(%q, gogwt) mangled GWT_POPULATE sentinel", sh)
+		}
 	}
 }
 

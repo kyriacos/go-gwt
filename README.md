@@ -97,6 +97,13 @@ eval "$(gwt shell-init zsh)"   # or: bash | fish
 Add that line to your `~/.zshrc` (or equivalent) to have `gwt new`/`co`/`from`
 drop you into the new worktree automatically.
 
+If you installed the binary under a different name, pass `--name` so the wrapper
+function and the command it calls match it:
+
+```sh
+eval "$(gogwt shell-init zsh --name gogwt)"
+```
+
 ## Configuration
 
 `gwt` reads `${XDG_CONFIG_HOME:-~/.config}/gwt/config.toml`, with a repo-local
