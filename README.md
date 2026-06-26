@@ -27,8 +27,12 @@ Worktrees default to a sibling of the repo (one level up), named
   deleted), missing, detached — with a legend when anything is stale.
 - A live Bubble Tea dashboard: every worktree with concurrent git status
   (branch, ahead/behind, dirty, last commit, disk size) and inline actions.
-- Interactive pickers: `from`/`co` with no argument open a branch picker; `clean`
-  opens a multi-select list with stale worktrees pre-marked.
+- Interactive pickers: `from`/`co` with no argument open a branch picker; `search`
+  fuzzy-finds worktrees; `clean` opens a multi-select list. When [fzf](https://github.com/junegunn/fzf)
+  is installed these use fzf (matching the original bash `gwt`); otherwise the
+  built-in TUI pickers are used. No-arg `from`/`co` with fzf emit a
+  `GWT_POPULATE:` line so the shell wrapper can park the command for review
+  before you run it.
 - `gh` integration: check out a PR into a new worktree; see PR and CI status.
 - Safety checks: warns before removing a worktree with uncommitted or unpushed
   work, and refuses to remove the main worktree.
@@ -47,7 +51,9 @@ Prebuilt binaries for macOS and Linux (amd64/arm64) are attached to each
 
 ### Build from source
 
-Requires Go 1.26+ and `git` at runtime (`gh` is optional, for the PR commands).
+Requires Go 1.26+ and `git` at runtime. [`gh`](https://cli.github.com/) is optional
+(for PR commands). [`fzf`](https://github.com/junegunn/fzf) is optional but
+recommended for fast interactive pickers (`search`, `clean`, and no-arg `from`/`co`).
 
 ```sh
 git clone https://github.com/kyriacos/go-gwt
@@ -74,6 +80,7 @@ To cut a release build locally (matches CI), install
 gwt new feature            # new branch + worktree (sibling), prints its path
 gwt from existing-branch   # worktree for an existing branch (no arg = picker)
 gwt co feature             # switch if it exists, else create from branch
+gwt search                 # fzf worktree picker (falls back to dashboard without fzf)
 gwt rm feature -d          # remove the worktree and delete its local branch
 gwt ls                     # table of all worktrees (non-interactive)
 gwt                        # no args + a tty = open the dashboard
@@ -97,12 +104,32 @@ eval "$(gwt shell-init zsh)"   # or: bash | fish
 Add that line to your `~/.zshrc` (or equivalent) to have `gwt new`/`co`/`from`
 drop you into the new worktree automatically.
 
+The wrapper does **not** run `gwt ls` after every `cd` by default (that used to
+cost a second binary startup). To restore the old auto-list behaviour:
+
+```sh
+export GWT_AUTO_LS=1
+```
+
+When fzf is installed, `gwt from` / `gwt co` with no argument print a
+`GWT_POPULATE:gwt from <branch>` (or `co`) line instead of creating the
+worktree immediately. The wrapper writes that into your line buffer so you can
+add flags (`--no-setup`, `-p <dir>`, etc.) before pressing Enter.
+
 If you installed the binary under a different name, pass `--name` so the wrapper
 function and the command it calls match it:
 
 ```sh
 eval "$(gogwt shell-init zsh --name gogwt)"
 ```
+
+### Environment variables (shell)
+
+| Variable | Effect |
+|----------|--------|
+| `GWT_AUTO_LS` | When set (any value), the shell wrapper runs `gwt ls` after `cd` into a worktree. Off by default for faster switches. |
+| `GWT_WORKTREE_DIR` | Default parent directory for new worktrees (see config below). |
+| `GWT_RUN_SETUP` | Default for whether repo setup commands run (`1`/`0`, or `always`/`never`/`prompt`). |
 
 ## Configuration
 

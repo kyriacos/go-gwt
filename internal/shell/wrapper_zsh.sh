@@ -33,7 +33,10 @@ gwt() {
       local out
       out="$(command gwt)" || return
       if [[ -n "$out" ]]; then
-        builtin cd -- "${out##*$'\n'}" && command gwt ls
+        builtin cd -- "${out##*$'\n'}"
+        if [[ -n ${GWT_AUTO_LS:-} ]]; then
+          command gwt ls
+        fi
       fi
       ;;
     *)
