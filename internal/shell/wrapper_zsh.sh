@@ -22,7 +22,10 @@ gwt() {
       if [[ "$out" == GWT_POPULATE:* ]]; then
         print -z -- "${out#GWT_POPULATE:}"
       else
-        builtin cd -- "${out##*$'\n'}" && command gwt ls
+        builtin cd -- "${out##*$'\n'}"
+        if [[ -n ${GWT_AUTO_LS:-} ]]; then
+          command gwt ls
+        fi
       fi
       ;;
     "")

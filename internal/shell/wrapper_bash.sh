@@ -30,7 +30,10 @@ gwt() {
           printf '%s\n' "$cmd" >&2
         fi
       else
-        builtin cd -- "${out##*$'\n'}" && command gwt ls
+        builtin cd -- "${out##*$'\n'}"
+        if [[ -n ${GWT_AUTO_LS:-} ]]; then
+          command gwt ls
+        fi
       fi
       ;;
     *)

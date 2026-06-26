@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/kyriacos/go-gwt/internal/fzf"
 	"github.com/kyriacos/go-gwt/internal/git"
 	"github.com/kyriacos/go-gwt/internal/tui"
 	"github.com/kyriacos/go-gwt/internal/ui"
@@ -37,6 +38,33 @@ func newCleanCmd() *cobra.Command {
 // cleanInteractive opens the multi-select picker (stale entries pre-marked) and
 // removes whatever the user confirms, deleting branches of stale worktrees.
 func cleanInteractive(d *deps) error {
+	if fzf.Available() {
+		return cleanInteractiveFzf(d)
+	}
+	return cleanInteractiveTUI(d)
+}
+
+func cleanInteractiveFzf(d *deps) error {
+	lines, stateByPath, err := fzf.FormatCleanLines(d.repo)
+	if err != nil {
+		return err
+	}
+	if len(lines) == 0 {
+		ui.Info("No removable worktrees.")
+		return nil
+	}
+	paths, err := fzf.PickWorktreesMulti(lines, fzf.FormatCleanHeader())
+	if err != nil {
+		return err
+	}
+	if len(paths) == 0 {
+		ui.Info("Nothing selected.")
+		return nil
+	}
+	return removeCleanPaths(d, paths, stateByPath)
+}
+
+func cleanInteractiveTUI(d *deps) error {
 	wts, err := d.repo.List()
 	if err != nil {
 		return err
@@ -66,19 +94,22 @@ func cleanInteractive(d *deps) error {
 		ui.Info("Nothing selected.")
 		return nil
 	}
+	return removeCleanPaths(d, paths, stateByPath)
+}
 
+func removeCleanPaths(d *deps, paths []string, stateByPath map[string]string) error {
 	for _, p := range paths {
 		st := stateByPath[p]
 		_, rerr := d.svc.Remove(worktree.RemoveOpts{
 			Target:      p,
-			Force:       st == git.StateMissing, // missing dirs can't be checked; force
-			ForceDelete: git.IsStale(st),        // delete branches of stale (gone/missing)
+			Force:       st == git.StateMissing,
+			ForceDelete: git.IsStale(st),
 		})
 		if rerr != nil {
 			ui.Warn("skipped %s: %v", p, rerr)
 		}
 	}
-	_ = d.repo.Prune() // tidy any leftover missing-worktree metadata
+	_ = d.repo.Prune()
 	return nil
 }
 

@@ -14,6 +14,7 @@ import (
 type CmdRepo struct {
 	run exec.Runner
 	ctx context.Context
+	list listCached
 }
 
 // New returns a CmdRepo backed by the given runner.

@@ -15,11 +15,10 @@ func (r *CmdRepo) Root() (string, error) {
 // MainWorktree returns the path of the main worktree: the first `worktree `
 // record reported by `git worktree list --porcelain`.
 func (r *CmdRepo) MainWorktree() (string, error) {
-	out, err := r.git("", "git worktree list", "worktree", "list", "--porcelain")
+	wts, err := r.fetchList()
 	if err != nil {
 		return "", err
 	}
-	wts := parseWorktreeList(out)
 	if len(wts) == 0 {
 		return "", fmt.Errorf("git worktree list: no worktrees found")
 	}
@@ -29,11 +28,7 @@ func (r *CmdRepo) MainWorktree() (string, error) {
 // List returns every worktree of the repository. The first entry is the main
 // worktree (IsMain=true).
 func (r *CmdRepo) List() ([]Worktree, error) {
-	out, err := r.git("", "git worktree list", "worktree", "list", "--porcelain")
-	if err != nil {
-		return nil, err
-	}
-	return parseWorktreeList(out), nil
+	return r.fetchList()
 }
 
 // Add creates a worktree. With NewBranch it creates a branch via
@@ -51,6 +46,9 @@ func (r *CmdRepo) Add(opts AddOpts) error {
 		args = []string{"worktree", "add", opts.Path, opts.Branch}
 	}
 	_, err := r.git("", "git worktree add", args...)
+	if err == nil {
+		r.invalidateList()
+	}
 	return err
 }
 
@@ -62,12 +60,18 @@ func (r *CmdRepo) Remove(path string, force bool) error {
 	}
 	args = append(args, path)
 	_, err := r.git("", "git worktree remove", args...)
+	if err == nil {
+		r.invalidateList()
+	}
 	return err
 }
 
 // Prune prunes worktree administrative files for deleted worktrees.
 func (r *CmdRepo) Prune() error {
 	_, err := r.git("", "git worktree prune", "worktree", "prune")
+	if err == nil {
+		r.invalidateList()
+	}
 	return err
 }
 

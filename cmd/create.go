@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kyriacos/go-gwt/internal/fzf"
 	"github.com/kyriacos/go-gwt/internal/tui"
 	"github.com/kyriacos/go-gwt/internal/ui"
 	"github.com/kyriacos/go-gwt/internal/worktree"
@@ -12,16 +13,32 @@ import (
 
 // branchArg returns the branch from args, or opens the interactive picker when
 // no argument was given. Returns "" when the picker is cancelled.
-func branchArg(d *deps, args []string) (string, error) {
+// populateVerb is the subcommand name ("from" or "co") used for GWT_POPULATE.
+func branchArg(d *deps, args []string, populateVerb string) (string, error) {
 	if len(args) >= 1 {
 		return args[0], nil
 	}
-	return pickBranch(d)
+	return pickBranch(d, populateVerb)
 }
 
 // pickBranch opens the interactive branch picker (used by from/co with no
-// argument). Returns "" if the user cancels.
-func pickBranch(d *deps) (string, error) {
+// argument). When fzf is available, emits GWT_POPULATE for shell review (bash
+// parity). Returns "" if the user cancels.
+func pickBranch(d *deps, populateVerb string) (string, error) {
+	if fzf.Available() {
+		lines, err := fzf.BuildBranchLines(d.repo)
+		if err != nil {
+			return "", err
+		}
+		branch, populate, err := fzf.PickBranch(populateVerb, lines)
+		if err != nil || populate != "" {
+			if populate != "" {
+				ui.Populate(populate)
+			}
+			return "", err
+		}
+		return branch, nil
+	}
 	states, err := d.repo.BranchStates()
 	if err != nil {
 		return "", err
@@ -113,7 +130,7 @@ func newFromCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			branch, err := branchArg(d, args)
+			branch, err := branchArg(d, args, "from")
 			if err != nil || branch == "" {
 				return err
 			}
@@ -141,7 +158,7 @@ func newCoCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			name, err := branchArg(d, args)
+			name, err := branchArg(d, args, "co")
 			if err != nil || name == "" {
 				return err
 			}

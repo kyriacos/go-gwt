@@ -88,13 +88,3 @@ func newDashboardCmd() *cobra.Command {
 		RunE:  func(*cobra.Command, []string) error { return runDashboard() },
 	}
 }
-
-func newSearchCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:     "search",
-		Aliases: []string{"pick"},
-		Short:   "Fuzzy-search worktrees and print the chosen path",
-		Args:    cobra.NoArgs,
-		RunE:    func(*cobra.Command, []string) error { return runDashboard() },
-	}
-}

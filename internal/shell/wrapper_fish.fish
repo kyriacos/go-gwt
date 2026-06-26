@@ -23,7 +23,10 @@ function gwt
             if string match -q 'GWT_POPULATE:*' -- "$last"
                 commandline -r -- (string replace 'GWT_POPULATE:' '' -- "$last")
             else
-                builtin cd -- "$last"; and command gwt ls
+                builtin cd -- "$last"
+                if test -n "$GWT_AUTO_LS"
+                    command gwt ls
+                end
             end
         case '*'
             command gwt $argv

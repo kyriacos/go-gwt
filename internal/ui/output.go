@@ -42,5 +42,11 @@ func Path(p string) {
 	fmt.Fprintln(os.Stdout, p)
 }
 
+// Populate prints a GWT_POPULATE line to stdout so the shell wrapper can park
+// the suggested command in the line buffer for review before running.
+func Populate(cmd string) {
+	fmt.Fprintf(os.Stdout, "GWT_POPULATE:%s\n", cmd)
+}
+
 // Bold returns text styled bold (no-op when color is disabled).
 func Bold(text string) string { return render(styleBold, text) }
