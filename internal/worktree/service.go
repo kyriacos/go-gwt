@@ -69,12 +69,14 @@ type CreateOpts struct {
 	Name        string // branch name (new) or existing branch
 	Base        string // base ref when creating a new branch
 	NewBranch   bool
-	ParentDir   string    // overrides config; empty means resolve from config
-	SetupChoice SetupMode // explicit setup decision from a flag
-	OpenEditor  bool
+	ParentDir          string    // overrides config; empty means resolve from config
+	CursorSetupChoice  SetupMode // explicit Cursor worktree_setup decision from a flag
+	ClaudeSetupChoice  SetupMode // explicit Claude worktree_setup decision from a flag
+	OpenEditor         bool
 }
 
-// SetupMode is an explicit per-invocation setup decision.
+// SetupMode is an explicit per-invocation worktree_setup decision for an IDE
+// integration (Cursor or Claude).
 type SetupMode int
 
 const (
@@ -135,13 +137,16 @@ func (s *Service) Create(opts CreateOpts) (Result, error) {
 
 	ctx := context.Background()
 
-	// Lifecycle: user hooks first (trusted), then repo setup (consent-gated).
+	// Lifecycle: user hooks first (trusted), then IDE setup (consent-gated).
 	if s.Setup != nil {
 		if err := s.Setup.RunHooks(ctx, setup.PostCreate, dest, root); err != nil {
 			ui.Warn("post_create hooks: %v", err)
 		}
-		if err := s.Setup.RunSetup(ctx, dest, root, opts.SetupChoice.decision()); err != nil {
-			ui.Warn("setup: %v", err)
+		if err := s.Setup.RunCursorSetup(ctx, dest, root, opts.CursorSetupChoice.decision()); err != nil {
+			ui.Warn("cursor setup: %v", err)
+		}
+		if err := s.Setup.RunClaudeSetup(ctx, dest, root, opts.ClaudeSetupChoice.decision()); err != nil {
+			ui.Warn("claude setup: %v", err)
 		}
 	}
 

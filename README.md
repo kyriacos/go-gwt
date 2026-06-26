@@ -39,6 +39,7 @@ Worktrees default to a sibling of the repo (one level up), named
 - `clean`: multi-select removal of worktrees (`--merged` for a non-interactive sweep).
 - TOML config with a clear precedence chain and repo-local overrides.
 - Post-create / pre-remove hooks, plus optional editor and tmux launch on create.
+- IDE worktree setup: runs Cursor's `.cursor/worktrees.json` commands and Claude Code's `.worktreeinclude` copies (both consent-gated).
 
 ## Install
 
@@ -114,7 +115,7 @@ export GWT_AUTO_LS=1
 When fzf is installed, `gwt from` / `gwt co` with no argument print a
 `GWT_POPULATE:gwt from <branch>` (or `co`) line instead of creating the
 worktree immediately. The wrapper writes that into your line buffer so you can
-add flags (`--no-setup`, `-p <dir>`, etc.) before pressing Enter.
+add flags (`--cursor-no-setup`, `--claude-no-setup`, `-p <dir>`, etc.) before pressing Enter.
 
 If you installed the binary under a different name, pass `--name` so the wrapper
 function and the command it calls match it:
@@ -129,7 +130,9 @@ eval "$(gogwt shell-init zsh --name gogwt)"
 |----------|--------|
 | `GWT_AUTO_LS` | When set (any value), the shell wrapper runs `gwt ls` after `cd` into a worktree. Off by default for faster switches. |
 | `GWT_WORKTREE_DIR` | Default parent directory for new worktrees (see config below). |
-| `GWT_RUN_SETUP` | Default for whether repo setup commands run (`1`/`0`, or `always`/`never`/`prompt`). |
+| `GWT_CURSOR_RUN_SETUP` | Whether to run Cursor worktree setup from `.cursor/worktrees.json` (`1`/`0`, or `always`/`never`/`prompt`). |
+| `GWT_RUN_SETUP` | Deprecated alias for `GWT_CURSOR_RUN_SETUP`. |
+| `GWT_CLAUDE_RUN_SETUP` | Whether to run Claude worktree setup from `.worktreeinclude` (`1`/`0`, or `always`/`never`/`prompt`). |
 
 ## Configuration
 
@@ -140,14 +143,19 @@ variables / command-line flags overriding both. All keys are optional:
 ```toml
 worktree_dir = ""                # default: parent of the main worktree
 naming       = "{repo}-{branch}" # tokens: {repo} {branch} {branch_slug}
-auto_setup   = "prompt"          # prompt | always | never
 open_editor  = false
 editor       = ""                # e.g. "cursor", "code", "nvim"; falls back to $EDITOR
 tmux         = false             # open a new tmux window/session in the worktree
 
+[cursor]
+worktree_setup = "prompt"        # prompt | always | never — consent for .cursor/worktrees.json
+
+[claude]
+worktree_setup = "prompt"        # prompt | always | never — consent for .worktreeinclude copies
+
 [hooks]
-post_create = []                 # shell commands; cwd = new worktree
-pre_remove  = []                 # shell commands; cwd = worktree about to go
+post_create = []                 # your shell commands; cwd = new worktree; always run
+pre_remove  = []                 # your shell commands; cwd = worktree about to go; always run
 
 [gh]
 enabled = true                   # auto-detected; set false to disable
@@ -156,9 +164,34 @@ enabled = true                   # auto-detected; set false to disable
 color = "auto"                   # auto | always | never (also honors NO_COLOR)
 ```
 
-Hooks and setup commands come from the repo and are treated as untrusted: they
-run only with your consent (`auto_setup`, `--run-setup`/`--no-setup`, or an
-interactive prompt; skipped by default when there is no tty).
+### Worktree setup (Cursor and Claude)
+
+After creating a worktree, `gwt` can run IDE-specific preparation. These are
+separate from your own `[hooks]` (which always run without prompting).
+
+**Cursor** — reads `<main-worktree>/.cursor/worktrees.json` and runs the
+`setup-worktree` shell commands (same format [Cursor uses](https://cursor.com/docs/configuration/worktrees)).
+Commands run in the new worktree with `$ROOT_WORKTREE_PATH` pointing at the main
+checkout. Consent is controlled by `[cursor].worktree_setup`, `GWT_CURSOR_RUN_SETUP`,
+or `--cursor-run-setup` / `--cursor-no-setup` (aliases: `--run-setup` / `--no-setup`).
+
+If the repo has no `worktrees.json`, `gwt` silently copies a top-level `.env`
+from the main worktree when the new one does not already have one (not
+consent-gated).
+
+**Claude Code** — reads `<main-worktree>/.worktreeinclude` and copies matching
+gitignored files into the new worktree (same rules as
+[Claude Code worktrees](https://code.claude.com/docs/en/worktrees): only paths
+that match a pattern in `.worktreeinclude` *and* are ignored by the repo's
+`.gitignore` are copied; tracked files are never duplicated). Consent is
+controlled by `[claude].worktree_setup`, `GWT_CLAUDE_RUN_SETUP`, or
+`--claude-run-setup` / `--claude-no-setup`.
+
+`WorktreeCreate` hooks from `.claude/settings.json` are not run — those replace
+git worktree creation entirely, and `gwt` has already created the worktree.
+
+The deprecated top-level `auto_setup` key still maps to `[cursor].worktree_setup`
+for backward compatibility.
 
 ## Contributing
 

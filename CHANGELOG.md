@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial project scaffolding: CI, release tooling, and documentation.
+- Claude Code worktree setup: copy gitignored paths from `.worktreeinclude` (consent-gated via `[claude].worktree_setup`, `GWT_CLAUDE_RUN_SETUP`, `--claude-run-setup` / `--claude-no-setup`).
+
+### Changed
+
+- Rename generic `auto_setup` to `[cursor].worktree_setup` for Cursor `.cursor/worktrees.json` integration; add `[claude].worktree_setup`. Deprecated keys and env vars still work.
 
 [Unreleased]: https://github.com/kyriacos/go-gwt/commits/main

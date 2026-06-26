@@ -4,14 +4,22 @@
 //
 // # Trust model
 //
-// There are two distinct sources of commands, with different trust:
+// There are three distinct sources of commands, with different trust:
 //
-//   - Repo-provided setup commands live in <root>/.cursor/worktrees.json under
+//   - Cursor repo setup commands live in <root>/.cursor/worktrees.json under
 //     the "setup-worktree" key. They ship with the repository, so in a clone you
 //     did not write they are UNTRUSTED: they never run without consent. Consent
 //     precedence (highest first): an explicit per-invocation Decision (from a
-//     --run-setup / --no-setup flag) > Cfg.AutoSetup (always | never) >
-//     an interactive prompt (only when a tty exists; default No when none).
+//     --cursor-run-setup / --cursor-no-setup flag) > Cfg.CursorWorktreeSetup()
+//     (always | never) > an interactive prompt (only when a tty exists;
+//     default No when none).
+//
+//   - Claude Code worktree preparation copies gitignored paths from
+//     <root>/.worktreeinclude into the new worktree (same rules as Claude Code).
+//     These patterns ship with the repository, so they are UNTRUSTED and
+//     consent-gated via Cfg.ClaudeWorktreeSetup() with the same precedence as
+//     Cursor setup. WorktreeCreate hooks are not run — go-gwt already created
+//     the worktree via git.
 //
 //   - User-config hooks (Cfg.Hooks.PostCreate / PreRemove) come from the user's
 //     own ~/.config/gwt/config.toml, so they are TRUSTED and run without any
@@ -25,16 +33,17 @@
 //	r := setup.New(runner, cfg)
 //	// after `git worktree add`:
 //	_ = r.RunHooks(ctx, setup.PostCreate, newPath, root)
-//	_ = r.RunSetup(ctx, newPath, root, decision)
+//	_ = r.RunCursorSetup(ctx, newPath, root, cursorDecision)
+//	_ = r.RunClaudeSetup(ctx, newPath, root, claudeDecision)
 //	// before `git worktree remove`:
 //	_ = r.RunHooks(ctx, setup.PreRemove, targetPath, root)
 //
 // All commands run through the injected exec.Runner via `sh -c "<cmd>"`, with
 // cwd set appropriately and ROOT_WORKTREE_PATH exported. Individual command
 // failures are reported as warnings and do not abort the sequence, matching the
-// bash tool. RunSetup and RunHooks return a non-nil error only for setup-level
-// problems (e.g. an unreadable worktrees.json), never for a failing user
-// command.
+// bash tool. RunCursorSetup and RunHooks return a non-nil error only for
+// setup-level problems (e.g. an unreadable worktrees.json), never for a failing
+// user command.
 package setup
 
 import (
@@ -59,17 +68,18 @@ const rootEnvVar = "ROOT_WORKTREE_PATH"
 // setup-worktree commands.
 const rootToken = "$ROOT_WORKTREE_PATH"
 
-// Decision is an explicit per-invocation choice that overrides Cfg.AutoSetup.
-// It models the --run-setup / --no-setup flags (and $GWT_RUN_SETUP) of the bash
-// tool. Default means "no explicit choice; fall through to config / prompt".
+// Decision is an explicit per-invocation choice that overrides the configured
+// worktree_setup mode for an IDE integration. It models the --cursor-run-setup
+// / --cursor-no-setup flags (and $GWT_CURSOR_RUN_SETUP) of the bash tool.
+// Default means "no explicit choice; fall through to config / prompt".
 type Decision int
 
 const (
-	// DecisionDefault defers to Cfg.AutoSetup, then to an interactive prompt.
+	// DecisionDefault defers to config, then to an interactive prompt.
 	DecisionDefault Decision = iota
-	// DecisionYes runs repo setup commands without prompting.
+	// DecisionYes runs IDE setup without prompting.
 	DecisionYes
-	// DecisionNo skips repo setup commands without prompting.
+	// DecisionNo skips IDE setup without prompting.
 	DecisionNo
 )
 
@@ -84,56 +94,52 @@ func New(run exec.Runner, cfg config.Config) *Runner {
 	return &Runner{Run: run, Cfg: cfg}
 }
 
-// confirm reports the user's consent to run repo setup commands. It honors the
-// no-tty case by defaulting to No.
-func (r *Runner) confirm(cmds []string) bool {
+func (r *Runner) confirmCursor(cmds []string) bool {
 	if !ui.HasTTY() {
 		ui.Warn(".cursor/worktrees.json defines setup commands, but there is no terminal to confirm; skipping.")
-		ui.Dim("Re-run with --run-setup to execute them.")
+		ui.Dim("Re-run with --cursor-run-setup to execute them.")
 		return false
 	}
 	ui.Warn("This repo's .cursor/worktrees.json wants to run these setup commands:")
 	for _, c := range cmds {
 		ui.Dim("  $ %s", c)
 	}
-	return ui.Confirm("Run them?", false)
+	return ui.Confirm("Run Cursor worktree setup?", false)
 }
 
-// consent resolves whether repo setup commands may run, applying the precedence:
-// explicit Decision > Cfg.AutoSetup > interactive prompt (default No w/o tty).
-func (r *Runner) consent(decision Decision, cmds []string) bool {
+func (r *Runner) consent(decision Decision, configured config.WorktreeSetup, cmds []string, confirmFn func([]string) bool) bool {
 	switch decision {
 	case DecisionYes:
 		return true
 	case DecisionNo:
 		return false
 	}
-	switch r.Cfg.AutoSetup {
+	switch configured {
 	case config.SetupAlways:
 		return true
 	case config.SetupNever:
 		return false
 	}
-	return r.confirm(cmds)
+	return confirmFn(cmds)
 }
 
-// RunSetup prepares a newly created worktree at newPath. root is the main
-// worktree path. decision overrides config for this invocation.
+// RunCursorSetup prepares a newly created worktree at newPath. root is the main
+// worktree path. decision overrides [cursor].worktree_setup for this invocation.
 //
 // If <root>/.cursor/worktrees.json defines setup-worktree commands, they are
 // run (subject to consent) in newPath with ROOT_WORKTREE_PATH exported and the
-// $ROOT_WORKTREE_PATH token substituted. With no such config, RunSetup falls
-// back to copying a top-level .env from root into newPath when present and not
-// already there.
-func (r *Runner) RunSetup(ctx context.Context, newPath, root string, decision Decision) error {
-	cmds, err := loadSetupCommands(root)
+// $ROOT_WORKTREE_PATH token substituted. With no such config, RunCursorSetup
+// falls back to copying a top-level .env from root into newPath when present and
+// not already there (this fallback is not consent-gated).
+func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decision Decision) error {
+	cmds, err := loadCursorSetupCommands(root)
 	if err != nil {
 		return err
 	}
 
 	if len(cmds) > 0 {
-		if !r.consent(decision, cmds) {
-			ui.Dim("Skipped setup-worktree commands.")
+		if !r.consent(decision, r.Cfg.CursorWorktreeSetup(), cmds, r.confirmCursor) {
+			ui.Dim("Skipped Cursor setup-worktree commands.")
 			return nil
 		}
 		ui.Dim("Running setup-worktree from .cursor/worktrees.json ...")
@@ -146,10 +152,10 @@ func (r *Runner) RunSetup(ctx context.Context, newPath, root string, decision De
 	return copyEnvFallback(root, newPath)
 }
 
-// loadSetupCommands reads <root>/.cursor/worktrees.json and returns the
+// loadCursorSetupCommands reads <root>/.cursor/worktrees.json and returns the
 // "setup-worktree" commands with $ROOT_WORKTREE_PATH substituted for root.
 // A missing file yields no commands and no error. A malformed file is an error.
-func loadSetupCommands(root string) ([]string, error) {
+func loadCursorSetupCommands(root string) ([]string, error) {
 	cfgPath := filepath.Join(root, ".cursor", "worktrees.json")
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {

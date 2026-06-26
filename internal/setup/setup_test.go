@@ -35,9 +35,9 @@ func TestLoadSetupCommands_Substitution(t *testing.T) {
 	  ]
 	}`)
 
-	cmds, err := loadSetupCommands(root)
+	cmds, err := loadCursorSetupCommands(root)
 	if err != nil {
-		t.Fatalf("loadSetupCommands: %v", err)
+		t.Fatalf("loadCursorSetupCommands: %v", err)
 	}
 	want := []string{
 		"ln -s " + root + "/node_modules node_modules",
@@ -56,7 +56,7 @@ func TestLoadSetupCommands_Substitution(t *testing.T) {
 
 func TestLoadSetupCommands_MissingFile(t *testing.T) {
 	root := t.TempDir()
-	cmds, err := loadSetupCommands(root)
+	cmds, err := loadCursorSetupCommands(root)
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got %v", err)
 	}
@@ -68,7 +68,7 @@ func TestLoadSetupCommands_MissingFile(t *testing.T) {
 func TestLoadSetupCommands_Malformed(t *testing.T) {
 	root := t.TempDir()
 	writeWorktreesJSON(t, root, `{ not valid json `)
-	if _, err := loadSetupCommands(root); err == nil {
+	if _, err := loadCursorSetupCommands(root); err == nil {
 		t.Fatal("expected error for malformed json, got nil")
 	}
 }
@@ -83,14 +83,14 @@ func shCalls(f *exec.Fake) []string {
 	return append([]string(nil), f.Calls...)
 }
 
-func TestRunSetup_DecisionPrecedence(t *testing.T) {
+func TestRunCursorSetup_DecisionPrecedence(t *testing.T) {
 	ctx := context.Background()
 	body := `{"setup-worktree": ["echo hi", "echo bye"]}`
 
 	tests := []struct {
 		name     string
 		decision Decision
-		auto     config.AutoSetup
+		mode     config.WorktreeSetup
 		wantRun  bool
 	}{
 		{"explicit yes overrides never", DecisionYes, config.SetupNever, true},
@@ -106,9 +106,9 @@ func TestRunSetup_DecisionPrecedence(t *testing.T) {
 			writeWorktreesJSON(t, root, body)
 
 			f := fakeWithDefault()
-			r := New(f, config.Config{AutoSetup: tc.auto})
-			if err := r.RunSetup(ctx, newPath, root, tc.decision); err != nil {
-				t.Fatalf("RunSetup: %v", err)
+			r := New(f, config.Config{Cursor: config.Cursor{WorktreeSetup: tc.mode}})
+			if err := r.RunCursorSetup(ctx, newPath, root, tc.decision); err != nil {
+				t.Fatalf("RunCursorSetup: %v", err)
 			}
 
 			ran := len(shCalls(f)) > 0
@@ -128,11 +128,11 @@ func TestRunSetup_DecisionPrecedence(t *testing.T) {
 	}
 }
 
-// TestRunSetup_PromptNoTTY verifies the DecisionDefault + SetupPrompt path:
+// TestRunCursorSetup_PromptNoTTY verifies the DecisionDefault + SetupPrompt path:
 // when no tty is available, consent defaults to No and nothing runs. Test
 // environments have no controlling /dev/tty, so this exercises the no-tty
 // branch deterministically.
-func TestRunSetup_PromptNoTTY(t *testing.T) {
+func TestRunCursorSetup_PromptNoTTY(t *testing.T) {
 	if ui.HasTTY() {
 		t.Skip("a tty is attached; cannot deterministically test the no-tty default")
 	}
@@ -142,16 +142,16 @@ func TestRunSetup_PromptNoTTY(t *testing.T) {
 	writeWorktreesJSON(t, root, `{"setup-worktree": ["echo hi"]}`)
 
 	f := fakeWithDefault()
-	r := New(f, config.Config{AutoSetup: config.SetupPrompt})
-	if err := r.RunSetup(ctx, newPath, root, DecisionDefault); err != nil {
-		t.Fatalf("RunSetup: %v", err)
+	r := New(f, config.Config{Cursor: config.Cursor{WorktreeSetup: config.SetupPrompt}})
+	if err := r.RunCursorSetup(ctx, newPath, root, DecisionDefault); err != nil {
+		t.Fatalf("RunCursorSetup: %v", err)
 	}
 	if len(f.Calls) != 0 {
 		t.Fatalf("expected nothing run without a tty, got %v", f.Calls)
 	}
 }
 
-func TestRunSetup_RunsInNewPathWithEnv(t *testing.T) {
+func TestRunCursorSetup_RunsInNewPathWithEnv(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	newPath := t.TempDir()
@@ -162,19 +162,19 @@ func TestRunSetup_RunsInNewPathWithEnv(t *testing.T) {
 
 	f := &exec.Fake{Default: &exec.FakeResult{}}
 	r := New(f, config.Config{})
-	if err := r.RunSetup(ctx, newPath, root, DecisionYes); err != nil {
-		t.Fatalf("RunSetup: %v", err)
+	if err := r.RunCursorSetup(ctx, newPath, root, DecisionYes); err != nil {
+		t.Fatalf("RunCursorSetup: %v", err)
 	}
 	if len(f.Calls) != 1 {
 		t.Fatalf("expected 1 call, got %v", f.Calls)
 	}
 	// The env var is restored (unset) after the run.
 	if _, ok := os.LookupEnv(rootEnvVar); ok {
-		t.Errorf("%s should be unset after RunSetup, but is set", rootEnvVar)
+		t.Errorf("%s should be unset after RunCursorSetup, but is set", rootEnvVar)
 	}
 }
 
-func TestRunSetup_ContinuesOnFailure(t *testing.T) {
+func TestRunCursorSetup_ContinuesOnFailure(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	newPath := t.TempDir()
@@ -187,15 +187,15 @@ func TestRunSetup_ContinuesOnFailure(t *testing.T) {
 		Default: &exec.FakeResult{},
 	}
 	r := New(f, config.Config{})
-	if err := r.RunSetup(ctx, newPath, root, DecisionYes); err != nil {
-		t.Fatalf("RunSetup should not return command failures, got %v", err)
+	if err := r.RunCursorSetup(ctx, newPath, root, DecisionYes); err != nil {
+		t.Fatalf("RunCursorSetup should not return command failures, got %v", err)
 	}
 	if len(f.Calls) != 2 {
 		t.Fatalf("expected both commands attempted, got %v", f.Calls)
 	}
 }
 
-func TestRunSetup_EnvFallback(t *testing.T) {
+func TestRunCursorSetup_EnvFallback(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	newPath := t.TempDir()
@@ -206,8 +206,8 @@ func TestRunSetup_EnvFallback(t *testing.T) {
 
 	f := fakeWithDefault()
 	r := New(f, config.Config{})
-	if err := r.RunSetup(ctx, newPath, root, DecisionDefault); err != nil {
-		t.Fatalf("RunSetup: %v", err)
+	if err := r.RunCursorSetup(ctx, newPath, root, DecisionDefault); err != nil {
+		t.Fatalf("RunCursorSetup: %v", err)
 	}
 
 	got, err := os.ReadFile(filepath.Join(newPath, ".env"))
@@ -222,7 +222,7 @@ func TestRunSetup_EnvFallback(t *testing.T) {
 	}
 }
 
-func TestRunSetup_EnvFallback_NoClobber(t *testing.T) {
+func TestRunCursorSetup_EnvFallback_NoClobber(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	newPath := t.TempDir()
@@ -234,8 +234,8 @@ func TestRunSetup_EnvFallback_NoClobber(t *testing.T) {
 	}
 
 	r := New(fakeWithDefault(), config.Config{})
-	if err := r.RunSetup(ctx, newPath, root, DecisionDefault); err != nil {
-		t.Fatalf("RunSetup: %v", err)
+	if err := r.RunCursorSetup(ctx, newPath, root, DecisionDefault); err != nil {
+		t.Fatalf("RunCursorSetup: %v", err)
 	}
 	got, _ := os.ReadFile(filepath.Join(newPath, ".env"))
 	if string(got) != "EXISTING=1\n" {
@@ -243,13 +243,13 @@ func TestRunSetup_EnvFallback_NoClobber(t *testing.T) {
 	}
 }
 
-func TestRunSetup_EnvFallback_NoSource(t *testing.T) {
+func TestRunCursorSetup_EnvFallback_NoSource(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	newPath := t.TempDir()
 	r := New(fakeWithDefault(), config.Config{})
-	if err := r.RunSetup(ctx, newPath, root, DecisionDefault); err != nil {
-		t.Fatalf("RunSetup with nothing to do should be a no-op, got %v", err)
+	if err := r.RunCursorSetup(ctx, newPath, root, DecisionDefault); err != nil {
+		t.Fatalf("RunCursorSetup with nothing to do should be a no-op, got %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(newPath, ".env")); !os.IsNotExist(err) {
 		t.Errorf("did not expect a .env to be created")
@@ -257,15 +257,15 @@ func TestRunSetup_EnvFallback_NoSource(t *testing.T) {
 }
 
 // TestRunHooks_TrustedNoConsent verifies user-config hooks run without any
-// consent gate, even when AutoSetup is "never" (which only governs repo setup
-// commands). This is the trusted-vs-untrusted distinction.
+// consent gate, even when cursor.worktree_setup is "never" (which only governs
+// Cursor setup commands). This is the trusted-vs-untrusted distinction.
 func TestRunHooks_TrustedNoConsent(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	cwd := t.TempDir()
 
 	cfg := config.Config{
-		AutoSetup: config.SetupNever, // would block repo setup; must NOT block hooks
+		Cursor: config.Cursor{WorktreeSetup: config.SetupNever}, // must NOT block hooks
 		Hooks: config.Hooks{
 			PostCreate: []string{"echo created", "make deps"},
 			PreRemove:  []string{"echo removing"},

@@ -17,7 +17,7 @@ func isolateEnv(t *testing.T) (xdgDir string) {
 	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	t.Setenv("HOME", t.TempDir())
 	for _, k := range []string{
-		"GWT_WORKTREE_DIR", "GWT_NAMING", "GWT_RUN_SETUP",
+		"GWT_WORKTREE_DIR", "GWT_NAMING", "GWT_RUN_SETUP", "GWT_CURSOR_RUN_SETUP", "GWT_CLAUDE_RUN_SETUP",
 		"GWT_EDITOR", "GWT_NO_COLOR", "NO_COLOR",
 	} {
 		t.Setenv(k, "")
@@ -92,8 +92,8 @@ color = "never"
 	if got.Naming != "{branch}" {
 		t.Errorf("Naming = %q, want {branch}", got.Naming)
 	}
-	if got.AutoSetup != SetupAlways {
-		t.Errorf("AutoSetup = %q, want always", got.AutoSetup)
+	if got.CursorWorktreeSetup() != SetupAlways {
+		t.Errorf("CursorWorktreeSetup() = %q, want always", got.CursorWorktreeSetup())
 	}
 	if !got.OpenEditor || got.Editor != "nvim" || !got.Tmux {
 		t.Errorf("editor/tmux not applied: %+v", got)
@@ -117,8 +117,8 @@ func TestLoad_UserFile_PartialKeepsDefaults(t *testing.T) {
 		t.Errorf("Naming = %q", got.Naming)
 	}
 	// Unspecified keys must keep defaults.
-	if got.AutoSetup != SetupPrompt {
-		t.Errorf("AutoSetup = %q, want default prompt", got.AutoSetup)
+	if got.CursorWorktreeSetup() != SetupPrompt {
+		t.Errorf("CursorWorktreeSetup() = %q, want default prompt", got.CursorWorktreeSetup())
 	}
 	if !got.GH.Enabled {
 		t.Errorf("GH.Enabled should remain default true")
@@ -147,8 +147,8 @@ auto_setup = "never"
 	if got.Naming != "{repo}-{branch_slug}" {
 		t.Errorf("Naming = %q, want repo-local value", got.Naming)
 	}
-	if got.AutoSetup != SetupNever {
-		t.Errorf("AutoSetup = %q, want never (repo override)", got.AutoSetup)
+	if got.CursorWorktreeSetup() != SetupNever {
+		t.Errorf("CursorWorktreeSetup() = %q, want never (repo override)", got.CursorWorktreeSetup())
 	}
 	// Repo file did not set editor -> user value survives.
 	if got.Editor != "code" {
@@ -182,15 +182,15 @@ auto_setup   = "prompt"
 	if got.Naming != "{repo}/{branch}" {
 		t.Errorf("Naming = %q, want env value", got.Naming)
 	}
-	if got.AutoSetup != SetupNever {
-		t.Errorf("AutoSetup = %q, want never (env)", got.AutoSetup)
+	if got.Cursor.WorktreeSetup != SetupNever {
+		t.Errorf("Cursor.WorktreeSetup = %q, want never (env)", got.Cursor.WorktreeSetup)
 	}
 }
 
-func TestLoad_EnvRunSetupTriState(t *testing.T) {
+func TestLoad_EnvCursorRunSetupTriState(t *testing.T) {
 	cases := []struct {
 		val  string
-		want AutoSetup
+		want WorktreeSetup
 	}{
 		{"1", SetupAlways},
 		{"true", SetupAlways},
@@ -205,16 +205,46 @@ func TestLoad_EnvRunSetupTriState(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.val, func(t *testing.T) {
 			isolateEnv(t)
-			t.Setenv("GWT_RUN_SETUP", tc.val)
+			t.Setenv("GWT_CURSOR_RUN_SETUP", tc.val)
 			got, err := Load("")
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if got.AutoSetup != tc.want {
-				t.Errorf("GWT_RUN_SETUP=%q -> AutoSetup %q, want %q", tc.val, got.AutoSetup, tc.want)
+			if got.CursorWorktreeSetup() != tc.want {
+				t.Errorf("GWT_CURSOR_RUN_SETUP=%q -> CursorWorktreeSetup() %q, want %q", tc.val, got.CursorWorktreeSetup(), tc.want)
 			}
 		})
 	}
+}
+
+func TestLoad_EnvRunSetupDeprecatedAlias(t *testing.T) {
+	isolateEnv(t)
+	t.Setenv("GWT_RUN_SETUP", "always")
+	got, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Cursor.WorktreeSetup != SetupAlways {
+		t.Errorf("GWT_RUN_SETUP alias -> Cursor.WorktreeSetup %q, want always", got.Cursor.WorktreeSetup)
+	}
+}
+
+func TestConfig_CursorWorktreeSetup_Precedence(t *testing.T) {
+	t.Run("cursor section wins over deprecated auto_setup", func(t *testing.T) {
+		cfg := Config{
+			AutoSetup: SetupAlways,
+			Cursor:    Cursor{WorktreeSetup: SetupNever},
+		}
+		if got := cfg.CursorWorktreeSetup(); got != SetupNever {
+			t.Errorf("got %q, want never", got)
+		}
+	})
+	t.Run("deprecated auto_setup fallback", func(t *testing.T) {
+		cfg := Config{AutoSetup: SetupAlways}
+		if got := cfg.CursorWorktreeSetup(); got != SetupAlways {
+			t.Errorf("got %q, want always", got)
+		}
+	})
 }
 
 func TestLoad_EnvEditorSetsOpenEditor(t *testing.T) {
@@ -293,7 +323,19 @@ func TestLoad_MalformedRepoTOML(t *testing.T) {
 }
 
 func TestLoad_InvalidEnum(t *testing.T) {
-	t.Run("auto_setup", func(t *testing.T) {
+	t.Run("cursor.worktree_setup", func(t *testing.T) {
+		xdg := isolateEnv(t)
+		writeUserConfig(t, xdg, `[cursor]
+worktree_setup = "sometimes"`)
+		_, err := Load("")
+		if err == nil {
+			t.Fatal("expected error for invalid cursor.worktree_setup")
+		}
+		if !strings.Contains(err.Error(), "cursor.worktree_setup") {
+			t.Errorf("error should name cursor.worktree_setup, got: %v", err)
+		}
+	})
+	t.Run("deprecated auto_setup", func(t *testing.T) {
 		xdg := isolateEnv(t)
 		writeUserConfig(t, xdg, `auto_setup = "sometimes"`)
 		_, err := Load("")

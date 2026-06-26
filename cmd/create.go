@@ -57,24 +57,43 @@ func pickBranch(d *deps, populateVerb string) (string, error) {
 
 // createFlags are the options shared by new/from/co/pr.
 type createFlags struct {
-	path     string
-	runSetup bool
-	noSetup  bool
-	open     bool
+	path            string
+	cursorRunSetup  bool
+	cursorNoSetup   bool
+	claudeRunSetup  bool
+	claudeNoSetup   bool
+	legacyRunSetup  bool
+	legacyNoSetup   bool
+	open            bool
 }
 
 func (f *createFlags) bind(c *cobra.Command) {
 	c.Flags().StringVarP(&f.path, "path", "p", "", "parent dir for the new worktree")
-	c.Flags().BoolVar(&f.runSetup, "run-setup", false, "run repo setup commands without prompting")
-	c.Flags().BoolVar(&f.noSetup, "no-setup", false, "skip repo setup commands")
+	c.Flags().BoolVar(&f.cursorRunSetup, "cursor-run-setup", false, "run Cursor worktree setup (.cursor/worktrees.json) without prompting")
+	c.Flags().BoolVar(&f.cursorNoSetup, "cursor-no-setup", false, "skip Cursor worktree setup")
+	c.Flags().BoolVar(&f.claudeRunSetup, "claude-run-setup", false, "run Claude worktree setup (.worktreeinclude) without prompting")
+	c.Flags().BoolVar(&f.claudeNoSetup, "claude-no-setup", false, "skip Claude worktree setup")
+	c.Flags().BoolVar(&f.legacyRunSetup, "run-setup", false, "deprecated alias for --cursor-run-setup")
+	c.Flags().BoolVar(&f.legacyNoSetup, "no-setup", false, "deprecated alias for --cursor-no-setup")
 	c.Flags().BoolVar(&f.open, "open", false, "open the worktree in your editor after creating it")
 }
 
-func (f *createFlags) setupMode() worktree.SetupMode {
+func (f *createFlags) cursorSetupMode() worktree.SetupMode {
 	switch {
-	case f.noSetup:
+	case f.cursorNoSetup || f.legacyNoSetup:
 		return worktree.SetupNo
-	case f.runSetup:
+	case f.cursorRunSetup || f.legacyRunSetup:
+		return worktree.SetupYes
+	default:
+		return worktree.SetupDefault
+	}
+}
+
+func (f *createFlags) claudeSetupMode() worktree.SetupMode {
+	switch {
+	case f.claudeNoSetup:
+		return worktree.SetupNo
+	case f.claudeRunSetup:
 		return worktree.SetupYes
 	default:
 		return worktree.SetupDefault
@@ -83,12 +102,13 @@ func (f *createFlags) setupMode() worktree.SetupMode {
 
 func (f *createFlags) createOpts(name, base string, newBranch bool) worktree.CreateOpts {
 	return worktree.CreateOpts{
-		Name:        name,
-		Base:        base,
-		NewBranch:   newBranch,
-		ParentDir:   f.path,
-		SetupChoice: f.setupMode(),
-		OpenEditor:  f.open,
+		Name:              name,
+		Base:              base,
+		NewBranch:         newBranch,
+		ParentDir:         f.path,
+		CursorSetupChoice: f.cursorSetupMode(),
+		ClaudeSetupChoice: f.claudeSetupMode(),
+		OpenEditor:        f.open,
 	}
 }
 
