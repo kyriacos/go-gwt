@@ -93,7 +93,7 @@ func TestRunClaudeSetup_NoClobber(t *testing.T) {
 func TestRunClaudeSetup_DecisionPrecedence(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
-		name    string
+		name     string
 		decision Decision
 		mode     config.WorktreeSetup
 		wantCopy bool

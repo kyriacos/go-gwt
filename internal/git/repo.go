@@ -12,8 +12,8 @@ import (
 // git-layer agent implements them. The signatures here are frozen — add
 // methods rather than changing existing ones.
 type CmdRepo struct {
-	run exec.Runner
-	ctx context.Context
+	run  exec.Runner
+	ctx  context.Context
 	list listCached
 }
 

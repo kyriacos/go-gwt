@@ -57,14 +57,14 @@ func pickBranch(d *deps, populateVerb string) (string, error) {
 
 // createFlags are the options shared by new/from/co/pr.
 type createFlags struct {
-	path            string
-	cursorRunSetup  bool
-	cursorNoSetup   bool
-	claudeRunSetup  bool
-	claudeNoSetup   bool
-	legacyRunSetup  bool
-	legacyNoSetup   bool
-	open            bool
+	path           string
+	cursorRunSetup bool
+	cursorNoSetup  bool
+	claudeRunSetup bool
+	claudeNoSetup  bool
+	legacyRunSetup bool
+	legacyNoSetup  bool
+	open           bool
 }
 
 func (f *createFlags) bind(c *cobra.Command) {

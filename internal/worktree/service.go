@@ -66,13 +66,13 @@ func New(repo git.Repo, ghc gh.Client, cfg config.Config, run exec.Runner) *Serv
 
 // CreateOpts drives New/From/PR creation.
 type CreateOpts struct {
-	Name        string // branch name (new) or existing branch
-	Base        string // base ref when creating a new branch
-	NewBranch   bool
-	ParentDir          string    // overrides config; empty means resolve from config
-	CursorSetupChoice  SetupMode // explicit Cursor worktree_setup decision from a flag
-	ClaudeSetupChoice  SetupMode // explicit Claude worktree_setup decision from a flag
-	OpenEditor         bool
+	Name              string // branch name (new) or existing branch
+	Base              string // base ref when creating a new branch
+	NewBranch         bool
+	ParentDir         string    // overrides config; empty means resolve from config
+	CursorSetupChoice SetupMode // explicit Cursor worktree_setup decision from a flag
+	ClaudeSetupChoice SetupMode // explicit Claude worktree_setup decision from a flag
+	OpenEditor        bool
 }
 
 // SetupMode is an explicit per-invocation worktree_setup decision for an IDE

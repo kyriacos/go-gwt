@@ -12,7 +12,7 @@ func TestListCache(t *testing.T) {
 	porcelain := "worktree /main\nHEAD abcdef0\nbranch refs/heads/main\n\nworktree /feat\nHEAD 1234567\nbranch refs/heads/feat\n"
 	f := &xexec.Fake{
 		Responses: map[string]xexec.FakeResult{
-			xexec.Key("git", "worktree", "list", "--porcelain"): {Stdout: porcelain},
+			xexec.Key("git", "worktree", "list", "--porcelain"):            {Stdout: porcelain},
 			xexec.Key("git", "worktree", "add", "-b", "x", "/new", "HEAD"): {},
 		},
 	}
