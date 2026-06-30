@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	xexec "github.com/kyriacos/go-gwt/internal/exec"
@@ -246,5 +247,43 @@ func TestIntegrationPrune(t *testing.T) {
 	// Prune on a clean repo is a no-op but must not error.
 	if err := repo.Prune(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestIntegrationUpstreamAlignment(t *testing.T) {
+	skipIfNoGit(t)
+	t.Parallel()
+	tr := testutil.NewRepo(t)
+	repo := repoAt(tr.Dir)
+
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	tr.Git("init", "--bare", "-b", "main", bare)
+	tr.Git("remote", "add", "origin", bare)
+	tr.Git("push", "-u", "origin", "main")
+
+	tr.CreateBranch("feature")
+	tr.Git("config", "branch.feature.remote", "origin")
+	tr.Git("config", "branch.feature.merge", "refs/heads/main")
+
+	remote, branch, ok, err := repo.BranchUpstream("feature")
+	if err != nil || !ok || remote != "origin" || branch != "main" {
+		t.Fatalf("BranchUpstream = %q %q %v err=%v", remote, branch, ok, err)
+	}
+
+	if err := repo.UnsetUpstream("feature"); err != nil {
+		t.Fatalf("UnsetUpstream: %v", err)
+	}
+	_, _, ok, err = repo.BranchUpstream("feature")
+	if err != nil || ok {
+		t.Fatalf("expected no upstream after unset, ok=%v err=%v", ok, err)
+	}
+
+	tr.Git("push", "origin", "feature:feature")
+	if err := repo.SetUpstream("feature", "origin", "feature"); err != nil {
+		t.Fatalf("SetUpstream: %v", err)
+	}
+	remote, branch, ok, err = repo.BranchUpstream("feature")
+	if err != nil || !ok || remote != "origin" || branch != "feature" {
+		t.Fatalf("BranchUpstream after set = %q %q %v err=%v", remote, branch, ok, err)
 	}
 }

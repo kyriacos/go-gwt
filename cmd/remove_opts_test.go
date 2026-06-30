@@ -3,8 +3,9 @@ package cmd
 import (
 	"testing"
 
-	"github.com/kyriacos/go-gwt/internal/config"
 	"github.com/spf13/cobra"
+
+	"github.com/kyriacos/go-gwt/internal/config"
 )
 
 func TestResolveBranchDeletion_CLIOverridesConfig(t *testing.T) {

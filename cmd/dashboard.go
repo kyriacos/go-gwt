@@ -96,6 +96,6 @@ func newDashboardCmd() *cobra.Command {
 		Long:    dashboardLong,
 		Example: dashboardExample,
 		Args:    cobra.NoArgs,
-		RunE:  func(*cobra.Command, []string) error { return runDashboard() },
+		RunE:    func(*cobra.Command, []string) error { return runDashboard() },
 	}
 }

@@ -9,7 +9,6 @@ import (
 )
 
 func TestAllCommandsHaveHelp(t *testing.T) {
-	t.Parallel()
 	root := NewRootCmd()
 	for _, c := range root.Commands() {
 		if c.Hidden {
@@ -25,7 +24,6 @@ func TestAllCommandsHaveHelp(t *testing.T) {
 }
 
 func TestCoHelp(t *testing.T) {
-	t.Parallel()
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -54,7 +52,6 @@ func TestCoHelp(t *testing.T) {
 }
 
 func TestHelpUsesColor(t *testing.T) {
-	t.Parallel()
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -67,7 +64,6 @@ func TestHelpUsesColor(t *testing.T) {
 }
 
 func TestRootHelpListsCommands(t *testing.T) {
-	t.Parallel()
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -83,7 +79,6 @@ func TestRootHelpListsCommands(t *testing.T) {
 }
 
 func TestStyledUsage(t *testing.T) {
-	t.Parallel()
 	ui.SetColor(ui.Always)
 	root := NewRootCmd()
 	co, _, _ := root.Find([]string{"co"})

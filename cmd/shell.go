@@ -12,10 +12,10 @@ import (
 func newShellInitCmd() *cobra.Command {
 	var name string
 	c := &cobra.Command{
-		Use:     "shell-init <" + strings.Join(shell.Shells(), "|") + ">",
-		Short:   "Print the shell wrapper that lets gwt cd for you",
-		Long:    shellInitLong,
-		Example: shellInitExample,
+		Use:       "shell-init <" + strings.Join(shell.Shells(), "|") + ">",
+		Short:     "Print the shell wrapper that lets gwt cd for you",
+		Long:      shellInitLong,
+		Example:   shellInitExample,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: shell.Shells(),
 		RunE: func(_ *cobra.Command, args []string) error {

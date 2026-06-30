@@ -135,6 +135,8 @@ func (s *Service) Create(opts CreateOpts) (Result, error) {
 		return Result{}, fmt.Errorf("create worktree: %w", err)
 	}
 
+	s.alignBranchUpstream(opts.Name)
+
 	ctx := context.Background()
 
 	// Lifecycle: user hooks first (trusted), then IDE setup (consent-gated).
@@ -172,6 +174,7 @@ func (s *Service) Switch(name string, opts CreateOpts) (Result, error) {
 		return Result{}, err
 	}
 	if found {
+		s.alignBranchUpstream(wt.Branch)
 		return Result{Path: wt.Path, Branch: wt.Branch}, nil
 	}
 
@@ -316,7 +319,7 @@ func (s *Service) ResolveDest(name, parentOverride string) (string, error) {
 // CleanMerged removes worktrees whose branch is merged into the default branch.
 // When dryRun is true it reports candidates without removing anything.
 // deleteBranch and forceDelete control branch deletion; when both are false,
-// merged branches are still deleted (historical behaviour for --merged).
+// merged branches are still deleted (historical behavior for --merged).
 func (s *Service) CleanMerged(dryRun, deleteBranch, forceDelete bool) ([]Result, error) {
 	def, err := s.Repo.DefaultBranch()
 	if err != nil {

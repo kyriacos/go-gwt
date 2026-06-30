@@ -7,7 +7,6 @@ import (
 )
 
 func TestUseFzf_DefaultTUI(t *testing.T) {
-	t.Parallel()
 	forceTUI, forceFzf = false, false
 	if useFzf(config.Defaults()) {
 		t.Fatal("default config should use TUI")
@@ -15,7 +14,6 @@ func TestUseFzf_DefaultTUI(t *testing.T) {
 }
 
 func TestUseFzf_ConfigFzf(t *testing.T) {
-	t.Parallel()
 	forceTUI, forceFzf = false, false
 	cfg := config.Defaults()
 	cfg.UI.Picker = config.PickerFzf
@@ -25,7 +23,6 @@ func TestUseFzf_ConfigFzf(t *testing.T) {
 }
 
 func TestUseFzf_FlagOverrides(t *testing.T) {
-	t.Parallel()
 	cfg := config.Defaults()
 	cfg.UI.Picker = config.PickerFzf
 

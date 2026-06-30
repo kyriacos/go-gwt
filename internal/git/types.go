@@ -58,5 +58,9 @@ type Repo interface {
 	DeleteBranch(name string, force bool) error
 	IsMerged(branch, into string) (bool, error)
 	DefaultBranch() (string, error) // e.g. main/master via origin/HEAD
+	RemoteBranchExists(remote, branch string) (bool, error)
+	BranchUpstream(branch string) (remote, upstreamBranch string, configured bool, err error)
+	SetUpstream(branch, remote, upstreamBranch string) error
+	UnsetUpstream(branch string) error
 	DiskUsage(path string) (int64, error)
 }

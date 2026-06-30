@@ -22,6 +22,14 @@ type fakeRepo struct {
 	merged    map[string]bool // branch -> merged into default
 	defBranch string
 
+	remoteBranches  map[string]bool // "origin/feature" -> exists
+	branchUpstreams map[string]struct {
+		remote string
+		branch string
+	}
+	upstreamSets   []upstreamSetCall
+	upstreamUnsets []string
+
 	addCalls    []git.AddOpts
 	removeCalls []string
 	delBranch   []delCall
@@ -30,6 +38,19 @@ type fakeRepo struct {
 type delCall struct {
 	name  string
 	force bool
+}
+
+type upstreamSetCall struct {
+	branch         string
+	remote         string
+	upstreamBranch string
+}
+
+func (f *fakeRepo) remoteKey(remote, branch string) string {
+	if remote == "" {
+		remote = "origin"
+	}
+	return remote + "/" + branch
 }
 
 func (f *fakeRepo) Root() (string, error) {
@@ -69,6 +90,41 @@ func (f *fakeRepo) DefaultBranch() (string, error) {
 		return f.defBranch, nil
 	}
 	return "main", nil
+}
+func (f *fakeRepo) RemoteBranchExists(remote, branch string) (bool, error) {
+	if f.remoteBranches == nil {
+		return false, nil
+	}
+	return f.remoteBranches[f.remoteKey(remote, branch)], nil
+}
+func (f *fakeRepo) BranchUpstream(branch string) (string, string, bool, error) {
+	if f.branchUpstreams == nil {
+		return "", "", false, nil
+	}
+	up, ok := f.branchUpstreams[branch]
+	if !ok {
+		return "", "", false, nil
+	}
+	return up.remote, up.branch, true, nil
+}
+func (f *fakeRepo) SetUpstream(branch, remote, upstreamBranch string) error {
+	f.upstreamSets = append(f.upstreamSets, upstreamSetCall{branch, remote, upstreamBranch})
+	if f.branchUpstreams == nil {
+		f.branchUpstreams = map[string]struct {
+			remote string
+			branch string
+		}{}
+	}
+	f.branchUpstreams[branch] = struct {
+		remote string
+		branch string
+	}{remote: remote, branch: upstreamBranch}
+	return nil
+}
+func (f *fakeRepo) UnsetUpstream(branch string) error {
+	f.upstreamUnsets = append(f.upstreamUnsets, branch)
+	delete(f.branchUpstreams, branch)
+	return nil
 }
 func (f *fakeRepo) DiskUsage(path string) (int64, error) { return 0, nil }
 
@@ -310,6 +366,91 @@ func TestSwitch_CreatesWhenMissing(t *testing.T) {
 	}
 	if filepath.Base(res.Path) != "repo-other" {
 		t.Fatalf("path base = %q", filepath.Base(res.Path))
+	}
+}
+
+func TestSwitch_AlignsUpstreamWhenRemoteExists(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	main := filepath.Join(tmp, "repo")
+	existing := filepath.Join(tmp, "repo-feat")
+	repo := &fakeRepo{
+		main: main,
+		worktrees: []git.Worktree{
+			{Path: main, Branch: "main", IsMain: true},
+			{Path: existing, Branch: "feat"},
+		},
+		remoteBranches: map[string]bool{"origin/feat": true},
+		branchUpstreams: map[string]struct {
+			remote string
+			branch string
+		}{
+			"feat": {remote: "origin", branch: "main"},
+		},
+	}
+	svc := newService(t, repo, config.Defaults())
+
+	if _, err := svc.Switch("feat", CreateOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.upstreamSets) != 1 {
+		t.Fatalf("upstreamSets = %+v, want one set", repo.upstreamSets)
+	}
+	got := repo.upstreamSets[0]
+	if got.branch != "feat" || got.remote != "origin" || got.upstreamBranch != "feat" {
+		t.Fatalf("upstream set = %+v", got)
+	}
+}
+
+func TestSwitch_ClearsInheritedMainUpstream(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	main := filepath.Join(tmp, "repo")
+	existing := filepath.Join(tmp, "repo-feat")
+	repo := &fakeRepo{
+		main: main,
+		worktrees: []git.Worktree{
+			{Path: main, Branch: "main", IsMain: true},
+			{Path: existing, Branch: "feat"},
+		},
+		branchUpstreams: map[string]struct {
+			remote string
+			branch string
+		}{
+			"feat": {remote: "origin", branch: "main"},
+		},
+	}
+	svc := newService(t, repo, config.Defaults())
+
+	if _, err := svc.Switch("feat", CreateOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.upstreamUnsets) != 1 || repo.upstreamUnsets[0] != "feat" {
+		t.Fatalf("upstreamUnsets = %v, want [feat]", repo.upstreamUnsets)
+	}
+}
+
+func TestCreate_AlignsUpstreamForNewBranch(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	main := filepath.Join(tmp, "repo")
+	repo := &fakeRepo{
+		main:      main,
+		worktrees: []git.Worktree{{Path: main, Branch: "main", IsMain: true}},
+		branchUpstreams: map[string]struct {
+			remote string
+			branch string
+		}{
+			"feature": {remote: "origin", branch: "main"},
+		},
+	}
+	svc := newService(t, repo, config.Defaults())
+
+	if _, err := svc.Create(CreateOpts{Name: "feature", NewBranch: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.upstreamUnsets) != 1 || repo.upstreamUnsets[0] != "feature" {
+		t.Fatalf("upstreamUnsets = %v, want [feature]", repo.upstreamUnsets)
 	}
 }
 

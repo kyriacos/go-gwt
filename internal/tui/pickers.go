@@ -30,12 +30,12 @@ func newPickerStyles() pickerStyles {
 		pane:        lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")),
 		previewPane: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")),
 		errText:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
-		green:  c("2"),
-		blue:   c("4"),
-		red:    c("1"),
-		yellow: c("3"),
-		mark:   c("2").Bold(true),
-		gray:   lipgloss.NewStyle().Faint(true),
+		green:       c("2"),
+		blue:        c("4"),
+		red:         c("1"),
+		yellow:      c("3"),
+		mark:        c("2").Bold(true),
+		gray:        lipgloss.NewStyle().Faint(true),
 	}
 }
 
