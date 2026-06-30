@@ -25,24 +25,29 @@ func writeWorktreesJSON(t *testing.T, root, body string) {
 	}
 }
 
-func TestLoadSetupCommands_StringValue(t *testing.T) {
+func TestLoadSetupCommands_StringScriptPath(t *testing.T) {
 	root := t.TempDir()
+	newPath := t.TempDir()
 	writeWorktreesJSON(t, root, `{
-	  "setup-worktree": "bash .cursor/setup-worktree-unix.sh"
+	  "setup-worktree-unix": "setup-worktree-unix.sh"
 	}`)
 
-	cmds, err := loadCursorSetupCommands(root)
+	steps, err := loadCursorSetupSteps(root, newPath)
 	if err != nil {
-		t.Fatalf("loadCursorSetupCommands: %v", err)
+		t.Fatalf("loadCursorSetupSteps: %v", err)
 	}
-	want := []string{"bash .cursor/setup-worktree-unix.sh"}
-	if len(cmds) != len(want) {
-		t.Fatalf("got %d cmds %v, want %d %v", len(cmds), cmds, len(want), want)
+	if len(steps) != 1 {
+		t.Fatalf("got %d steps, want 1", len(steps))
 	}
-	for i := range want {
-		if cmds[i] != want[i] {
-			t.Errorf("cmd[%d] = %q, want %q", i, cmds[i], want[i])
-		}
+	wantCwd := filepath.Join(newPath, ".cursor")
+	if steps[0].cwd != wantCwd {
+		t.Errorf("cwd = %q, want %q", steps[0].cwd, wantCwd)
+	}
+	if !steps[0].script {
+		t.Error("expected script step")
+	}
+	if steps[0].cmd != "setup-worktree-unix.sh" {
+		t.Errorf("cmd = %q, want setup-worktree-unix.sh", steps[0].cmd)
 	}
 }
 
@@ -56,13 +61,16 @@ func TestLoadSetupCommands_UnixPrecedence(t *testing.T) {
 	  "setup-worktree": ["echo generic"]
 	}`)
 
-	cmds, err := loadCursorSetupCommands(root)
+	steps, err := loadCursorSetupSteps(root, t.TempDir())
 	if err != nil {
-		t.Fatalf("loadCursorSetupCommands: %v", err)
+		t.Fatalf("loadCursorSetupSteps: %v", err)
 	}
 	want := []string{"echo unix"}
-	if len(cmds) != len(want) || cmds[0] != want[0] {
-		t.Fatalf("got %v, want %v", cmds, want)
+	if len(steps) != len(want) || steps[0].cmd != want[0] {
+		t.Fatalf("got %v, want %v", steps, want)
+	}
+	if steps[0].script {
+		t.Error("array entry should not be treated as a script path")
 	}
 }
 
@@ -77,40 +85,44 @@ func TestLoadSetupCommands_Substitution(t *testing.T) {
 	  ]
 	}`)
 
-	cmds, err := loadCursorSetupCommands(root)
+	newPath := t.TempDir()
+	steps, err := loadCursorSetupSteps(root, newPath)
 	if err != nil {
-		t.Fatalf("loadCursorSetupCommands: %v", err)
+		t.Fatalf("loadCursorSetupSteps: %v", err)
 	}
 	want := []string{
 		"ln -s " + root + "/node_modules node_modules",
 		"cp " + root + "/.env .env",
 		"echo done",
 	}
-	if len(cmds) != len(want) {
-		t.Fatalf("got %d cmds %v, want %d %v", len(cmds), cmds, len(want), want)
+	if len(steps) != len(want) {
+		t.Fatalf("got %d steps %v, want %d %v", len(steps), steps, len(want), want)
 	}
 	for i := range want {
-		if cmds[i] != want[i] {
-			t.Errorf("cmd[%d] = %q, want %q", i, cmds[i], want[i])
+		if steps[i].cmd != want[i] {
+			t.Errorf("cmd[%d] = %q, want %q", i, steps[i].cmd, want[i])
+		}
+		if steps[i].cwd != newPath {
+			t.Errorf("step[%d] cwd = %q, want %q", i, steps[i].cwd, newPath)
 		}
 	}
 }
 
 func TestLoadSetupCommands_MissingFile(t *testing.T) {
 	root := t.TempDir()
-	cmds, err := loadCursorSetupCommands(root)
+	steps, err := loadCursorSetupSteps(root, t.TempDir())
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got %v", err)
 	}
-	if len(cmds) != 0 {
-		t.Fatalf("expected no commands, got %v", cmds)
+	if len(steps) != 0 {
+		t.Fatalf("expected no commands, got %v", steps)
 	}
 }
 
 func TestLoadSetupCommands_Malformed(t *testing.T) {
 	root := t.TempDir()
 	writeWorktreesJSON(t, root, `{ not valid json `)
-	if _, err := loadCursorSetupCommands(root); err == nil {
+	if _, err := loadCursorSetupSteps(root, t.TempDir()); err == nil {
 		t.Fatal("expected error for malformed json, got nil")
 	}
 }
@@ -210,9 +222,33 @@ func TestRunCursorSetup_RunsInNewPathWithEnv(t *testing.T) {
 	if len(f.Calls) != 1 {
 		t.Fatalf("expected 1 call, got %v", f.Calls)
 	}
+	if len(f.Dirs) != 1 || f.Dirs[0] != newPath {
+		t.Fatalf("expected command in new worktree, got dirs=%v", f.Dirs)
+	}
 	// The env var is restored (unset) after the run.
 	if _, ok := os.LookupEnv(rootEnvVar); ok {
 		t.Errorf("%s should be unset after RunCursorSetup, but is set", rootEnvVar)
+	}
+}
+
+func TestRunCursorSetup_RunsScriptFromCursorDir(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	newPath := t.TempDir()
+	writeWorktreesJSON(t, root, `{"setup-worktree-unix": "setup-worktree-unix.sh"}`)
+
+	f := &exec.Fake{Default: &exec.FakeResult{}}
+	r := New(f, config.Config{})
+	if err := r.RunCursorSetup(ctx, newPath, root, DecisionYes); err != nil {
+		t.Fatalf("RunCursorSetup: %v", err)
+	}
+	wantDir := filepath.Join(newPath, ".cursor")
+	wantCall := exec.Key("sh", "setup-worktree-unix.sh")
+	if len(f.Calls) != 1 || f.Calls[0] != wantCall {
+		t.Fatalf("calls = %v, want [%q]", f.Calls, wantCall)
+	}
+	if len(f.Dirs) != 1 || f.Dirs[0] != wantDir {
+		t.Fatalf("dirs = %v, want [%q]", f.Dirs, wantDir)
 	}
 }
 

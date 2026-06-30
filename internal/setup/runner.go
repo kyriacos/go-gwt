@@ -38,8 +38,9 @@
 //	// before `git worktree remove`:
 //	_ = r.RunHooks(ctx, setup.PreRemove, targetPath, root)
 //
-// All commands run through the injected exec.Runner via `sh -c "<cmd>"`, with
-// cwd set appropriately and ROOT_WORKTREE_PATH exported. Individual command
+// All commands run through the injected exec.Runner, with cwd set appropriately
+// and ROOT_WORKTREE_PATH exported. Cursor script paths run from
+// <worktree>/.cursor; command arrays and user hooks run from the worktree root.
 // failures are reported as warnings and do not abort the sequence, matching the
 // bash tool. RunCursorSetup and RunHooks return a non-nil error only for
 // setup-level problems (e.g. an unreadable worktrees.json), never for a failing
@@ -128,23 +129,28 @@ func (r *Runner) consent(decision Decision, configured config.WorktreeSetup, cmd
 // worktree path. decision overrides [cursor].worktree_setup for this invocation.
 //
 // If <root>/.cursor/worktrees.json defines setup-worktree commands, they are
-// run (subject to consent) in newPath with ROOT_WORKTREE_PATH exported and the
-// $ROOT_WORKTREE_PATH token substituted. With no such config, RunCursorSetup
-// falls back to copying a top-level .env from root into newPath when present and
-// not already there (this fallback is not consent-gated).
+// run (subject to consent) with ROOT_WORKTREE_PATH exported and the
+// $ROOT_WORKTREE_PATH token substituted. Script paths (a string value) run from
+// <newPath>/.cursor; command arrays run from newPath. With no such config,
+// RunCursorSetup falls back to copying a top-level .env from root into newPath
+// when present and not already there (this fallback is not consent-gated).
 func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decision Decision) error {
-	cmds, err := loadCursorSetupCommands(root)
+	steps, err := loadCursorSetupSteps(root, newPath)
 	if err != nil {
 		return err
 	}
 
-	if len(cmds) > 0 {
-		if !r.consent(decision, r.Cfg.CursorWorktreeSetup(), cmds, r.confirmCursor) {
+	if len(steps) > 0 {
+		prompt := make([]string, len(steps))
+		for i, s := range steps {
+			prompt[i] = s.display
+		}
+		if !r.consent(decision, r.Cfg.CursorWorktreeSetup(), prompt, r.confirmCursor) {
 			ui.Dim("Skipped Cursor setup-worktree commands.")
 			return nil
 		}
 		ui.Dim("Running setup-worktree from .cursor/worktrees.json ...")
-		r.runCommands(ctx, cmds, newPath, root)
+		r.runCursorSetupSteps(ctx, steps, root)
 		return nil
 	}
 
@@ -153,12 +159,23 @@ func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decis
 	return copyEnvFallback(root, newPath)
 }
 
-// loadCursorSetupCommands reads <root>/.cursor/worktrees.json and returns setup
-// commands with $ROOT_WORKTREE_PATH substituted for root. Cursor accepts each
-// setup key as either a string (one command or script path) or an array of
-// commands; on Unix, setup-worktree-unix takes precedence over setup-worktree.
-// A missing file yields no commands and no error. A malformed file is an error.
-func loadCursorSetupCommands(root string) ([]string, error) {
+// cursorSetupStep is one Cursor worktree setup action with its working directory.
+// Script paths (string values in worktrees.json) run via `sh <path>` from
+// <worktree>/.cursor; command arrays run via `sh -c` from the worktree root.
+type cursorSetupStep struct {
+	display string
+	cwd     string
+	script  bool
+	cmd     string
+}
+
+// loadCursorSetupSteps reads <root>/.cursor/worktrees.json and returns setup
+// steps with $ROOT_WORKTREE_PATH substituted for root. Cursor accepts each
+// setup key as either a string (script path relative to worktrees.json) or an
+// array of shell commands; on Unix, setup-worktree-unix takes precedence over
+// setup-worktree. A missing file yields no steps and no error. A malformed file
+// is an error.
+func loadCursorSetupSteps(root, newPath string) ([]cursorSetupStep, error) {
 	cfgPath := filepath.Join(root, ".cursor", "worktrees.json")
 	data, err := os.ReadFile(cfgPath)
 	if err != nil {
@@ -178,19 +195,47 @@ func loadCursorSetupCommands(root string) ([]string, error) {
 	}
 
 	raw := pickCursorSetupRaw(doc.SetupWorktreeUnix, doc.SetupWorktreeWindows, doc.SetupWorktree)
-	rawCmds, err := normalizeSetupCommands(raw)
-	if err != nil {
-		return nil, err
+	return parseCursorSetupRaw(raw, newPath, root)
+}
+
+func parseCursorSetupRaw(raw json.RawMessage, newPath, root string) ([]cursorSetupStep, error) {
+	if len(raw) == 0 {
+		return nil, nil
 	}
 
-	cmds := make([]string, 0, len(rawCmds))
-	for _, c := range rawCmds {
-		if strings.TrimSpace(c) == "" {
-			continue
+	var script string
+	if err := json.Unmarshal(raw, &script); err == nil {
+		script = strings.TrimSpace(script)
+		if script == "" {
+			return nil, nil
 		}
-		cmds = append(cmds, strings.ReplaceAll(c, rootToken, root))
+		return []cursorSetupStep{{
+			display: script,
+			cwd:     filepath.Join(newPath, ".cursor"),
+			script:  true,
+			cmd:     script,
+		}}, nil
 	}
-	return cmds, nil
+
+	var cmds []string
+	if err := json.Unmarshal(raw, &cmds); err == nil {
+		steps := make([]cursorSetupStep, 0, len(cmds))
+		for _, c := range cmds {
+			c = strings.TrimSpace(c)
+			if c == "" {
+				continue
+			}
+			c = strings.ReplaceAll(c, rootToken, root)
+			steps = append(steps, cursorSetupStep{
+				display: c,
+				cwd:     newPath,
+				cmd:     c,
+			})
+		}
+		return steps, nil
+	}
+
+	return nil, errors.New("setup-worktree value must be a string or array of strings")
 }
 
 func pickCursorSetupRaw(unix, windows, fallback json.RawMessage) json.RawMessage {
@@ -204,32 +249,35 @@ func pickCursorSetupRaw(unix, windows, fallback json.RawMessage) json.RawMessage
 	return fallback
 }
 
-func normalizeSetupCommands(raw json.RawMessage) ([]string, error) {
-	if len(raw) == 0 {
-		return nil, nil
-	}
-
-	var one string
-	if err := json.Unmarshal(raw, &one); err == nil {
-		if strings.TrimSpace(one) == "" {
-			return nil, nil
+// runCursorSetupSteps executes Cursor setup steps with per-step working
+// directories. ROOT_WORKTREE_PATH is exported for the whole sequence.
+func (r *Runner) runCursorSetupSteps(ctx context.Context, steps []cursorSetupStep, root string) {
+	prevRoot, hadRoot := os.LookupEnv(rootEnvVar)
+	_ = os.Setenv(rootEnvVar, root)
+	defer func() {
+		if hadRoot {
+			_ = os.Setenv(rootEnvVar, prevRoot)
+		} else {
+			_ = os.Unsetenv(rootEnvVar)
 		}
-		return []string{one}, nil
-	}
+	}()
 
-	var many []string
-	if err := json.Unmarshal(raw, &many); err == nil {
-		out := make([]string, 0, len(many))
-		for _, c := range many {
-			if strings.TrimSpace(c) == "" {
-				continue
-			}
-			out = append(out, c)
+	for _, step := range steps {
+		ui.Dim("  $ %s", step.display)
+		var stderr []byte
+		var err error
+		if step.script {
+			_, stderr, err = r.Run.Run(ctx, step.cwd, "sh", step.cmd)
+		} else {
+			_, stderr, err = r.Run.Run(ctx, step.cwd, "sh", "-c", step.cmd)
 		}
-		return out, nil
+		if len(stderr) > 0 {
+			ui.Dim("%s", string(stderr))
+		}
+		if err != nil {
+			ui.Warn("  (step failed, continuing): %s", step.display)
+		}
 	}
-
-	return nil, errors.New("setup-worktree value must be a string or array of strings")
 }
 
 // runCommands executes each command in cwd via `sh -c`, with ROOT_WORKTREE_PATH

@@ -24,6 +24,7 @@ type Fake struct {
 	Responses map[string]FakeResult
 	Default   *FakeResult
 	Calls     []string
+	Dirs      []string
 }
 
 // Key builds the map key for a command and its args.
@@ -35,9 +36,10 @@ func Key(name string, args ...string) string {
 }
 
 // Run implements Runner against the canned Responses.
-func (f *Fake) Run(_ context.Context, _, name string, args ...string) ([]byte, []byte, error) {
+func (f *Fake) Run(_ context.Context, dir, name string, args ...string) ([]byte, []byte, error) {
 	key := Key(name, args...)
 	f.Calls = append(f.Calls, key)
+	f.Dirs = append(f.Dirs, dir)
 	if r, ok := f.Responses[key]; ok {
 		return []byte(r.Stdout), []byte(r.Stderr), r.Err
 	}
