@@ -4,6 +4,7 @@ import (
 	"context"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	xexec "github.com/kyriacos/go-gwt/internal/exec"
@@ -285,5 +286,33 @@ func TestIntegrationUpstreamAlignment(t *testing.T) {
 	remote, branch, ok, err = repo.BranchUpstream("feature")
 	if err != nil || !ok || remote != "origin" || branch != "feature" {
 		t.Fatalf("BranchUpstream after set = %q %q %v err=%v", remote, branch, ok, err)
+	}
+}
+
+func TestIntegrationSetUpstreamBeforeRemoteExists(t *testing.T) {
+	skipIfNoGit(t)
+	t.Parallel()
+	tr := testutil.NewRepo(t)
+	repo := repoAt(tr.Dir)
+
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	tr.Git("init", "--bare", "-b", "main", bare)
+	tr.Git("remote", "add", "origin", bare)
+	tr.Git("push", "-u", "origin", "main")
+
+	tr.CreateBranch("test")
+	tr.Checkout("test")
+	if err := repo.SetUpstream("test", "origin", "test"); err != nil {
+		t.Fatalf("SetUpstream: %v", err)
+	}
+	remote, branch, ok, err := repo.BranchUpstream("test")
+	if err != nil || !ok || remote != "origin" || branch != "test" {
+		t.Fatalf("BranchUpstream = %q %q %v err=%v", remote, branch, ok, err)
+	}
+
+	tr.Git("push")
+	out := tr.Git("ls-remote", "--heads", "origin", "test")
+	if strings.TrimSpace(out) == "" {
+		t.Fatal("expected origin/test after git push")
 	}
 }

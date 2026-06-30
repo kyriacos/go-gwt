@@ -8,9 +8,8 @@ import (
 
 const upstreamRemote = "origin"
 
-// alignBranchUpstream points branch at origin/<branch> when that remote ref
-// exists, at origin/<default> for the default branch, or clears a stale upstream
-// inherited from another branch (e.g. origin/main on a feature branch).
+// alignBranchUpstream configures each branch to track origin/<branch> so a later
+// `git push` targets the correct remote branch. It does not push.
 func (s *Service) alignBranchUpstream(branch string) {
 	if branch == "" {
 		return
@@ -44,22 +43,7 @@ func (s *Service) alignDefaultBranchUpstream(branch, def string) error {
 }
 
 func (s *Service) alignFeatureBranchUpstream(branch string) error {
-	exists, err := s.Repo.RemoteBranchExists(upstreamRemote, branch)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return s.setUpstreamIfNeeded(branch, upstreamRemote, branch)
-	}
-
-	remote, upstreamBranch, configured, err := s.Repo.BranchUpstream(branch)
-	if err != nil {
-		return err
-	}
-	if configured && !(remote == upstreamRemote && upstreamBranch == branch) {
-		return s.Repo.UnsetUpstream(branch)
-	}
-	return nil
+	return s.setUpstreamIfNeeded(branch, upstreamRemote, branch)
 }
 
 func (s *Service) setUpstreamIfNeeded(branch, remote, upstreamBranch string) error {

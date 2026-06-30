@@ -40,13 +40,19 @@ func (r *CmdRepo) BranchUpstream(branch string) (remote, upstreamBranch string, 
 	return remote, upstreamBranch, true, nil
 }
 
-// SetUpstream configures branch to track remote/upstreamBranch.
+// SetUpstream configures branch to track remote/upstreamBranch. Uses branch.*
+// config directly so new branches work before the remote ref exists (plain
+// `git push` then creates and pushes to the right branch).
 func (r *CmdRepo) SetUpstream(branch, remote, upstreamBranch string) error {
 	if remote == "" {
 		remote = defaultRemote
 	}
-	_, err := r.git("", "git branch --set-upstream-to",
-		"branch", "--set-upstream-to="+remote+"/"+upstreamBranch, branch)
+	if _, err := r.git("", "git config branch upstream remote",
+		"config", "branch."+branch+".remote", remote); err != nil {
+		return err
+	}
+	_, err := r.git("", "git config branch upstream merge",
+		"config", "branch."+branch+".merge", "refs/heads/"+upstreamBranch)
 	return err
 }
 
