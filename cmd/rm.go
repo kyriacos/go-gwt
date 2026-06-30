@@ -19,11 +19,12 @@ func newRmCmd() *cobra.Command {
 		Long:    rmLong,
 		Example: rmExample,
 		Args:    cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			d, err := build()
 			if err != nil {
 				return err
 			}
+			del, forceDel := resolveBranchDeletion(cmd, d.cfg, deleteBranch, forceDelete)
 			target := ""
 			if len(args) == 1 {
 				target = args[0]
@@ -31,8 +32,8 @@ func newRmCmd() *cobra.Command {
 			_, err = d.svc.Remove(worktree.RemoveOpts{
 				Target:       target,
 				Force:        force,
-				DeleteBranch: deleteBranch,
-				ForceDelete:  forceDelete,
+				DeleteBranch: del,
+				ForceDelete:  forceDel,
 			})
 			return err
 		},

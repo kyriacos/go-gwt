@@ -17,7 +17,7 @@ go install github.com/kyriacos/go-gwt@latest
 
 Prebuilt binaries: [releases](https://github.com/kyriacos/go-gwt/releases).
 
-Optional: [`gh`](https://cli.github.com/) for PR checkout, [`fzf`](https://github.com/junegunn/fzf) for fast pickers.
+Optional: [`gh`](https://cli.github.com/) for PR checkout, [`fzf`](https://github.com/junegunn/fzf) if you prefer fzf pickers over the built-in TUI.
 
 ## Quickstart
 
@@ -51,7 +51,7 @@ Use `gwt <command> --help` for full docs on any command (colored, with examples)
 | `shell-init` | Shell wrapper for auto-`cd` |
 | `version` | Version info |
 
-Pass `--tui` to use the built-in pickers (branch log preview, dashboard) instead of fzf.
+Interactive pickers use the built-in TUI by default (branch log preview, dashboard). Pass `--fzf` for fzf pickers.
 
 ## Shell integration
 
@@ -90,12 +90,20 @@ worktree_setup = "prompt"        # prompt | always | never
 [claude]
 worktree_setup = "prompt"
 
+[remove]
+delete_branch = false            # gwt rm: delete branch by default (like -d)
+force_delete_branch = false      # gwt rm: force-delete (like -D)
+
+[ui]
+picker = "tui"                   # tui (default) | fzf
+color  = "always"
+
 [hooks]
 post_create = ["npm install"]
 pre_remove  = []
 ```
 
-Flags like `--path`, `--cursor-no-setup`, and `--open` override per invocation.
+Flags like `--path`, `--fzf`, `--cursor-no-setup`, and `--open` override per invocation.
 See `gwt co --help` for the full flag list.
 
 ## Contributing

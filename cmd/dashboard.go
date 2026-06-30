@@ -29,7 +29,7 @@ func (a tuiActions) Remove(target string, deleteBranch, force bool) error {
 }
 
 func (a tuiActions) CleanMerged(dryRun bool) ([]string, error) {
-	results, err := a.svc.CleanMerged(dryRun)
+	results, err := a.svc.CleanMerged(dryRun, false, false)
 	if err != nil {
 		return nil, err
 	}

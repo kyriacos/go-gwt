@@ -8,7 +8,7 @@ import (
 )
 
 func runSearch(d *deps) error {
-	if !forceTUI && fzf.Available() {
+	if fzfReady(d.cfg) {
 		lines, _, err := fzf.BuildWorktreeLines(d.repo)
 		if err != nil {
 			return err

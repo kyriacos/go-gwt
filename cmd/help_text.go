@@ -15,7 +15,7 @@ Run gwt <command> --help for detailed help on any subcommand.`
 	rootExample = `  gwt                           # open the dashboard (tty)
   gwt ls                        # list worktrees
   gwt co feature                # switch to or create a worktree
-  gwt co --tui                  # branch picker with built-in TUI + log preview
+  gwt co --fzf                  # fzf branch picker (parks command in shell)
   gwt pr 42                     # check out PR #42 into a new worktree
   eval "$(gwt shell-init zsh)"    # auto-cd after create/switch`
 
@@ -36,39 +36,41 @@ On success, prints the new worktree path to stdout (one line).`
 Does not create a new branch — the branch must already exist. For a fresh
 branch + worktree, use gwt new instead.
 
-With no argument, opens an interactive branch picker:
-  • fzf (when installed): parks "gwt from <branch>" in your shell line
-  • --tui: built-in picker with a git log preview pane; creates on Enter
+With no argument, opens the built-in branch picker (git log preview). Pass --fzf
+to use fzf instead; with fzf and no argument, parks "gwt from <branch>" in
+your shell line for review before Enter.
 
 Prints the new worktree path to stdout on success.`
 
 	fromExample = `  gwt from release-2.1          # worktree for existing branch
-  gwt from                        # interactive branch picker
-  gwt from --tui                  # TUI picker with log preview
-  gwt from bugfix --claude-no-setup`
+  gwt from                        # TUI branch picker
+  gwt from --fzf                  # fzf picker (parks command in shell)`
 
 	coLong = `Switch to the worktree for a name/branch, creating one if needed.
 
 If a matching worktree already exists, prints its path (shell wrapper cd's).
 If not, creates a worktree from the branch — same as gwt from <name>.
 
-With no argument, opens an interactive branch picker:
-  • fzf (when installed): parks "gwt co <branch>" for review before Enter
-  • --tui: built-in split-pane picker with git log preview; switches on Enter
+With no argument, opens the built-in branch picker (git log preview). Pass --fzf
+to use fzf instead; with fzf and no argument, parks "gwt co <branch>" for
+review before Enter.
 
 This is the usual day-to-day "jump to my feature branch" command.`
 
 	coExample = `  gwt co feature                # switch if exists, else create
-  gwt co                        # interactive picker (fzf when available)
-  gwt co --tui                  # TUI picker with branch log preview
-  gwt co my-fix -p ../trees     # custom parent when creating
-  gwt co hotfix --cursor-no-setup`
+  gwt co                        # TUI branch picker
+  gwt co --fzf                  # fzf picker (parks command in shell)
+  gwt co my-fix -p ../trees     # custom parent when creating`
 
 	rmLong = `Remove a worktree (and optionally its local branch).
 
 With no name, removes the worktree you are currently standing in. Refuses to
 remove the main worktree. Warns when uncommitted or unpushed work would be lost
-unless -f / --force is given.`
+unless -f / --force is given.
+
+Set [remove].delete_branch = true in config (or GWT_DELETE_BRANCH=1) to delete
+the branch by default without passing -d each time. Use force_delete_branch for
+-D semantics. CLI flags always override config.`
 
 	rmExample = `  gwt rm feature                # remove worktree for "feature"
   gwt rm                        # remove current worktree
@@ -94,27 +96,31 @@ The current worktree is marked with *. A legend is shown when stale entries exis
 
 	searchLong = `Fuzzy-find a worktree and print its path to stdout.
 
-When fzf is installed, opens an fzf picker with git log preview (default).
-With --tui, opens the full dashboard instead. Without fzf and without --tui,
-also falls back to the dashboard.
+By default opens the full dashboard. Pass --fzf to use an fzf picker with git
+log preview (requires fzf on PATH).
 
 Your shell wrapper cd's into the printed path.`
 
 	searchExample = `  gwt search
   gwt pick                      # alias
-  gwt search --tui              # use the dashboard picker`
+  gwt search --fzf              # fzf worktree picker`
 
 	cleanLong = `Remove unwanted worktrees.
 
-Interactive mode (default): multi-select picker; stale worktrees (gone,
-missing) are pre-marked. Uses fzf when installed, or the built-in TUI with
---tui / when fzf is absent.
+Interactive mode (default): built-in multi-select TUI; stale worktrees (gone,
+missing) are pre-marked and their branches are force-deleted on removal. Pass
+--fzf to use fzf instead.
 
---merged: non-interactive sweep of worktrees whose branch is merged into the
-default branch. Use --dry-run with --merged to preview.`
+-d / -D delete the local branch for every selected worktree (like gwt rm).
+Config [remove].delete_branch applies when neither flag is passed.
 
-	cleanExample = `  gwt clean                     # interactive multi-select
-  gwt clean --tui               # built-in TUI picker
+--merged: non-interactive sweep of worktrees merged into the default branch.
+Use --dry-run with --merged to preview.`
+
+	cleanExample = `  gwt clean                     # interactive multi-select (TUI)
+  gwt clean --fzf               # fzf multi-select
+  gwt clean -d                  # also delete each branch
+  gwt clean -D                  # force-delete branches (unmerged OK)
   gwt clean --merged            # remove all merged worktrees
   gwt clean --merged --dry-run  # preview only`
 

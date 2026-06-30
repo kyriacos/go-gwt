@@ -25,7 +25,7 @@ func branchArg(d *deps, args []string, populateVerb string) (string, error) {
 // argument). When fzf is available, emits GWT_POPULATE for shell review (bash
 // parity). Returns "" if the user cancels.
 func pickBranch(d *deps, populateVerb string) (string, error) {
-	if !forceTUI && fzf.Available() {
+	if fzfReady(d.cfg) {
 		lines, err := fzf.BuildBranchLines(d.repo)
 		if err != nil {
 			return "", err

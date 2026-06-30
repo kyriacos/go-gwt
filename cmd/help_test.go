@@ -42,7 +42,7 @@ func TestCoHelp(t *testing.T) {
 	out := buf.String()
 	for _, want := range []string{
 		"Switch to the worktree",
-		"--tui",
+		"--fzf",
 		"Examples",
 		"gwt co feature",
 		"Global flags",

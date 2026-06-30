@@ -18,6 +18,7 @@ func isolateEnv(t *testing.T) (xdgDir string) {
 	t.Setenv("HOME", t.TempDir())
 	for _, k := range []string{
 		"GWT_WORKTREE_DIR", "GWT_NAMING", "GWT_RUN_SETUP", "GWT_CURSOR_RUN_SETUP", "GWT_CLAUDE_RUN_SETUP",
+		"GWT_DELETE_BRANCH", "GWT_FORCE_DELETE_BRANCH", "GWT_PICKER",
 		"GWT_EDITOR", "GWT_NO_COLOR", "NO_COLOR",
 	} {
 		t.Setenv(k, "")
@@ -125,6 +126,9 @@ func TestLoad_UserFile_PartialKeepsDefaults(t *testing.T) {
 	}
 	if got.UI.Color != ColorAuto {
 		t.Errorf("UI.Color = %q, want default auto", got.UI.Color)
+	}
+	if got.UI.Picker != PickerTUI {
+		t.Errorf("UI.Picker = %q, want default tui", got.UI.Picker)
 	}
 }
 
@@ -295,6 +299,41 @@ color = "always"`)
 			t.Errorf("UI.Color = %q, want always (GWT_NO_COLOR=0 ignored)", got.UI.Color)
 		}
 	})
+}
+
+func TestLoad_EnvDeleteBranch(t *testing.T) {
+	isolateEnv(t)
+	t.Setenv("GWT_DELETE_BRANCH", "1")
+	got, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !got.Remove.DeleteBranch {
+		t.Error("GWT_DELETE_BRANCH=1 should set remove.delete_branch")
+	}
+}
+
+func TestConfig_DefaultBranchDeletion(t *testing.T) {
+	cfg := Defaults()
+	if del, force := cfg.DefaultBranchDeletion(); del || force {
+		t.Fatalf("defaults should not delete branch, got %v %v", del, force)
+	}
+	cfg.Remove.ForceDeleteBranch = true
+	if del, force := cfg.DefaultBranchDeletion(); !del || !force {
+		t.Fatalf("force_delete_branch should return true/true, got %v %v", del, force)
+	}
+}
+
+func TestLoad_EnvPicker(t *testing.T) {
+	isolateEnv(t)
+	t.Setenv("GWT_PICKER", "fzf")
+	got, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.UI.Picker != PickerFzf {
+		t.Errorf("UI.Picker = %q, want fzf", got.UI.Picker)
+	}
 }
 
 func TestLoad_MalformedTOML(t *testing.T) {

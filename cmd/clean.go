@@ -12,8 +12,10 @@ import (
 
 func newCleanCmd() *cobra.Command {
 	var (
-		merged bool
-		dryRun bool
+		merged       bool
+		dryRun       bool
+		deleteBranch bool
+		forceDelete  bool
 	)
 	c := &cobra.Command{
 		Use:     "clean",
@@ -21,32 +23,35 @@ func newCleanCmd() *cobra.Command {
 		Long:    cleanLong,
 		Example: cleanExample,
 		Args:    cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			d, err := build()
 			if err != nil {
 				return err
 			}
+			del, forceDel := resolveBranchDeletion(cmd, d.cfg, deleteBranch, forceDelete)
 			if merged {
-				return cleanMerged(d, dryRun)
+				return cleanMerged(d, dryRun, del, forceDel)
 			}
-			return cleanInteractive(d)
+			return cleanInteractive(d, del, forceDel)
 		},
 	}
 	c.Flags().BoolVar(&merged, "merged", false, "non-interactive: remove worktrees whose branch is merged into the default branch")
 	c.Flags().BoolVar(&dryRun, "dry-run", false, "with --merged, list what would be removed without removing")
+	c.Flags().BoolVarP(&deleteBranch, "delete-branch", "d", false, "also delete the local branch of each removed worktree")
+	c.Flags().BoolVarP(&forceDelete, "force-delete-branch", "D", false, "force-delete the local branch even if not fully merged")
 	return c
 }
 
 // cleanInteractive opens the multi-select picker (stale entries pre-marked) and
-// removes whatever the user confirms, deleting branches of stale worktrees.
-func cleanInteractive(d *deps) error {
-	if !forceTUI && fzf.Available() {
-		return cleanInteractiveFzf(d)
+// removes whatever the user confirms.
+func cleanInteractive(d *deps, deleteBranch, forceDelete bool) error {
+	if fzfReady(d.cfg) {
+		return cleanInteractiveFzf(d, deleteBranch, forceDelete)
 	}
-	return cleanInteractiveTUI(d)
+	return cleanInteractiveTUI(d, deleteBranch, forceDelete)
 }
 
-func cleanInteractiveFzf(d *deps) error {
+func cleanInteractiveFzf(d *deps, deleteBranch, forceDelete bool) error {
 	lines, stateByPath, err := fzf.FormatCleanLines(d.repo)
 	if err != nil {
 		return err
@@ -63,10 +68,10 @@ func cleanInteractiveFzf(d *deps) error {
 		ui.Info("Nothing selected.")
 		return nil
 	}
-	return removeCleanPaths(d, paths, stateByPath)
+	return removeCleanPaths(d, paths, stateByPath, deleteBranch, forceDelete)
 }
 
-func cleanInteractiveTUI(d *deps) error {
+func cleanInteractiveTUI(d *deps, deleteBranch, forceDelete bool) error {
 	wts, err := d.repo.List()
 	if err != nil {
 		return err
@@ -96,16 +101,24 @@ func cleanInteractiveTUI(d *deps) error {
 		ui.Info("Nothing selected.")
 		return nil
 	}
-	return removeCleanPaths(d, paths, stateByPath)
+	return removeCleanPaths(d, paths, stateByPath, deleteBranch, forceDelete)
 }
 
-func removeCleanPaths(d *deps, paths []string, stateByPath map[string]string) error {
+func removeCleanPaths(d *deps, paths []string, stateByPath map[string]string, deleteBranch, forceDelete bool) error {
 	for _, p := range paths {
 		st := stateByPath[p]
+		del, force := deleteBranch, forceDelete
+		// Stale worktrees (gone/missing) still force-delete the branch unless the
+		// user explicitly passed -d=false… which isn't possible; only skip when
+		// neither flag nor stale applies.
+		if !del && !force && git.IsStale(st) {
+			del, force = true, true
+		}
 		_, rerr := d.svc.Remove(worktree.RemoveOpts{
-			Target:      p,
-			Force:       st == git.StateMissing,
-			ForceDelete: git.IsStale(st),
+			Target:       p,
+			Force:        st == git.StateMissing,
+			DeleteBranch: del,
+			ForceDelete:  force,
 		})
 		if rerr != nil {
 			ui.Warn("skipped %s: %v", p, rerr)
@@ -116,8 +129,8 @@ func removeCleanPaths(d *deps, paths []string, stateByPath map[string]string) er
 }
 
 // cleanMerged is the non-interactive --merged sweep.
-func cleanMerged(d *deps, dryRun bool) error {
-	results, err := d.svc.CleanMerged(dryRun)
+func cleanMerged(d *deps, dryRun, deleteBranch, forceDelete bool) error {
+	results, err := d.svc.CleanMerged(dryRun, deleteBranch, forceDelete)
 	if err != nil {
 		return err
 	}

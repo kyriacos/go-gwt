@@ -315,7 +315,9 @@ func (s *Service) ResolveDest(name, parentOverride string) (string, error) {
 
 // CleanMerged removes worktrees whose branch is merged into the default branch.
 // When dryRun is true it reports candidates without removing anything.
-func (s *Service) CleanMerged(dryRun bool) ([]Result, error) {
+// deleteBranch and forceDelete control branch deletion; when both are false,
+// merged branches are still deleted (historical behaviour for --merged).
+func (s *Service) CleanMerged(dryRun, deleteBranch, forceDelete bool) ([]Result, error) {
 	def, err := s.Repo.DefaultBranch()
 	if err != nil {
 		return nil, fmt.Errorf("determine default branch: %w", err)
@@ -373,8 +375,14 @@ func (s *Service) CleanMerged(dryRun bool) ([]Result, error) {
 			ui.Warn("could not remove %s: %v", wt.Path, err)
 			continue
 		}
-		if err := s.Repo.DeleteBranch(wt.Branch, false); err != nil {
-			ui.Warn("removed %s but could not delete branch '%s': %v", wt.Path, wt.Branch, err)
+		del, force := deleteBranch, forceDelete
+		if !del && !force {
+			del = true // --merged: delete branch by default
+		}
+		if del || force {
+			if err := s.Repo.DeleteBranch(wt.Branch, force); err != nil {
+				ui.Warn("removed %s but could not delete branch '%s': %v", wt.Path, wt.Branch, err)
+			}
 		}
 		ui.OK("Removed merged worktree %s (%s)", wt.Path, wt.Branch)
 		results = append(results, Result{Path: wt.Path, Branch: wt.Branch})

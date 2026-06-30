@@ -19,9 +19,7 @@ var versionInfo struct {
 	version, commit, date string
 }
 
-// forceTUI makes interactive pickers use the built-in Bubble Tea UI instead of
-// fzf when both are available.
-var forceTUI bool
+// forceTUI and forceFzf are defined in picker.go.
 
 // deps bundles the assembled dependencies handed to command bodies.
 type deps struct {
@@ -76,7 +74,8 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	root.PersistentFlags().String("color", "always", "color output: always|auto|never")
-	root.PersistentFlags().BoolVar(&forceTUI, "tui", false, "use built-in TUI pickers (with log preview) instead of fzf")
+	root.PersistentFlags().BoolVar(&forceTUI, "tui", false, "use built-in TUI pickers (default; overrides --fzf)")
+	root.PersistentFlags().BoolVar(&forceFzf, "fzf", false, "use fzf pickers instead of the built-in TUI")
 
 	root.AddCommand(
 		newNewCmd(),

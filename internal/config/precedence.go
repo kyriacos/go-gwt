@@ -19,6 +19,9 @@ import (
 //	                          anything else       -> leave as configured
 //	GWT_RUN_SETUP             deprecated alias for GWT_CURSOR_RUN_SETUP
 //	GWT_CLAUDE_RUN_SETUP      sets [claude].worktree_setup (same values)
+//	GWT_DELETE_BRANCH           sets [remove].delete_branch (1/0, true/false, …)
+//	GWT_FORCE_DELETE_BRANCH     sets [remove].force_delete_branch (1/0, true/false, …)
+//	GWT_PICKER                  sets [ui].picker: tui | fzf
 //	GWT_EDITOR                editor command (string); also sets OpenEditor=true
 //	GWT_NO_COLOR              if truthy, force ColorNever
 //	NO_COLOR                  standard convention; if set (any value), force ColorNever
@@ -34,6 +37,25 @@ func applyEnv(cfg *Config) {
 	}
 	if v, ok := envWorktreeSetup("GWT_CLAUDE_RUN_SETUP"); ok {
 		cfg.Claude.WorktreeSetup = v
+	}
+	if v, ok := os.LookupEnv("GWT_DELETE_BRANCH"); ok {
+		switch parseBoolish(v) {
+		case boolTrue:
+			cfg.Remove.DeleteBranch = true
+		case boolFalse:
+			cfg.Remove.DeleteBranch = false
+		}
+	}
+	if v, ok := os.LookupEnv("GWT_FORCE_DELETE_BRANCH"); ok {
+		switch parseBoolish(v) {
+		case boolTrue:
+			cfg.Remove.ForceDeleteBranch = true
+		case boolFalse:
+			cfg.Remove.ForceDeleteBranch = false
+		}
+	}
+	if v, ok := os.LookupEnv("GWT_PICKER"); ok && v != "" {
+		cfg.UI.Picker = PickerMode(strings.ToLower(strings.TrimSpace(v)))
 	}
 	if v, ok := os.LookupEnv("GWT_EDITOR"); ok && v != "" {
 		cfg.Editor = v
@@ -129,6 +151,12 @@ func validate(cfg Config) error {
 	default:
 		return fmt.Errorf("config: invalid ui.color %q (want one of: %s, %s, %s)",
 			cfg.UI.Color, ColorAuto, ColorAlways, ColorNever)
+	}
+	switch cfg.UI.Picker {
+	case "", PickerTUI, PickerFzf:
+	default:
+		return fmt.Errorf("config: invalid ui.picker %q (want one of: %s, %s)",
+			cfg.UI.Picker, PickerTUI, PickerFzf)
 	}
 	return nil
 }

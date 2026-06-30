@@ -21,6 +21,14 @@ const (
 	ColorNever  ColorMode = "never"
 )
 
+// PickerMode selects the interactive picker UI.
+type PickerMode string
+
+const (
+	PickerTUI PickerMode = "tui"
+	PickerFzf PickerMode = "fzf"
+)
+
 // Cursor holds settings for Cursor's .cursor/worktrees.json integration.
 type Cursor struct {
 	// WorktreeSetup controls consent for setup-worktree commands in
@@ -42,6 +50,14 @@ type Hooks struct {
 	PreRemove  []string `toml:"pre_remove"`
 }
 
+// Remove holds defaults for worktree removal (gwt rm, and clean when flags are omitted).
+type Remove struct {
+	// DeleteBranch makes gwt rm delete the local branch by default (like -d).
+	DeleteBranch bool `toml:"delete_branch"`
+	// ForceDeleteBranch uses force-delete semantics by default (like -D).
+	ForceDeleteBranch bool `toml:"force_delete_branch"`
+}
+
 // GH toggles gh integration.
 type GH struct {
 	Enabled bool `toml:"enabled"`
@@ -49,7 +65,8 @@ type GH struct {
 
 // UI holds presentation options.
 type UI struct {
-	Color ColorMode `toml:"color"`
+	Color  ColorMode  `toml:"color"`
+	Picker PickerMode `toml:"picker"` // tui (default) | fzf
 }
 
 // Config is the fully-resolved configuration.
@@ -64,6 +81,7 @@ type Config struct {
 
 	Cursor Cursor `toml:"cursor"`
 	Claude Claude `toml:"claude"`
+	Remove Remove `toml:"remove"`
 
 	OpenEditor bool   `toml:"open_editor"`
 	Editor     string `toml:"editor"`
@@ -95,6 +113,24 @@ func (c Config) ClaudeWorktreeSetup() WorktreeSetup {
 	return SetupPrompt
 }
 
+// DefaultBranchDeletion returns the default branch-deletion behavior from config
+// when the caller did not pass explicit -d / -D flags.
+func (c Config) DefaultBranchDeletion() (deleteBranch, forceDelete bool) {
+	if c.Remove.ForceDeleteBranch {
+		return true, true
+	}
+	if c.Remove.DeleteBranch {
+		return true, false
+	}
+	return false, false
+}
+
+// UsePickerFzf reports whether interactive pickers should use fzf. Empty picker
+// defaults to the built-in TUI.
+func (c Config) UsePickerFzf() bool {
+	return c.UI.Picker == PickerFzf
+}
+
 // Defaults returns the built-in configuration.
 func Defaults() Config {
 	return Config{
@@ -104,7 +140,7 @@ func Defaults() Config {
 		Editor:      "",
 		Tmux:        false,
 		GH:          GH{Enabled: true},
-		UI:          UI{Color: ColorAuto},
+		UI:          UI{Color: ColorAuto, Picker: PickerTUI},
 	}
 }
 

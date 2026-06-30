@@ -459,7 +459,7 @@ func TestCleanMerged_DryRunSelectsCandidates(t *testing.T) {
 	repo := cleanRepo(tmp)
 	svc := newService(t, repo, config.Defaults())
 
-	results, err := svc.CleanMerged(true)
+	results, err := svc.CleanMerged(true, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -477,7 +477,7 @@ func TestCleanMerged_RemovesAndDeletesBranch(t *testing.T) {
 	repo := cleanRepo(tmp)
 	svc := newService(t, repo, config.Defaults())
 
-	results, err := svc.CleanMerged(false)
+	results, err := svc.CleanMerged(false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
