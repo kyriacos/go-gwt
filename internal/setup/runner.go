@@ -53,6 +53,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/kyriacos/go-gwt/internal/config"
@@ -152,8 +153,10 @@ func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decis
 	return copyEnvFallback(root, newPath)
 }
 
-// loadCursorSetupCommands reads <root>/.cursor/worktrees.json and returns the
-// "setup-worktree" commands with $ROOT_WORKTREE_PATH substituted for root.
+// loadCursorSetupCommands reads <root>/.cursor/worktrees.json and returns setup
+// commands with $ROOT_WORKTREE_PATH substituted for root. Cursor accepts each
+// setup key as either a string (one command or script path) or an array of
+// commands; on Unix, setup-worktree-unix takes precedence over setup-worktree.
 // A missing file yields no commands and no error. A malformed file is an error.
 func loadCursorSetupCommands(root string) ([]string, error) {
 	cfgPath := filepath.Join(root, ".cursor", "worktrees.json")
@@ -166,20 +169,67 @@ func loadCursorSetupCommands(root string) ([]string, error) {
 	}
 
 	var doc struct {
-		SetupWorktree []string `json:"setup-worktree"`
+		SetupWorktreeUnix    json.RawMessage `json:"setup-worktree-unix"`
+		SetupWorktreeWindows json.RawMessage `json:"setup-worktree-windows"`
+		SetupWorktree        json.RawMessage `json:"setup-worktree"`
 	}
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, err
 	}
 
-	cmds := make([]string, 0, len(doc.SetupWorktree))
-	for _, c := range doc.SetupWorktree {
+	raw := pickCursorSetupRaw(doc.SetupWorktreeUnix, doc.SetupWorktreeWindows, doc.SetupWorktree)
+	rawCmds, err := normalizeSetupCommands(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	cmds := make([]string, 0, len(rawCmds))
+	for _, c := range rawCmds {
 		if strings.TrimSpace(c) == "" {
 			continue
 		}
 		cmds = append(cmds, strings.ReplaceAll(c, rootToken, root))
 	}
 	return cmds, nil
+}
+
+func pickCursorSetupRaw(unix, windows, fallback json.RawMessage) json.RawMessage {
+	if runtime.GOOS == "windows" {
+		if len(windows) > 0 {
+			return windows
+		}
+	} else if len(unix) > 0 {
+		return unix
+	}
+	return fallback
+}
+
+func normalizeSetupCommands(raw json.RawMessage) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	var one string
+	if err := json.Unmarshal(raw, &one); err == nil {
+		if strings.TrimSpace(one) == "" {
+			return nil, nil
+		}
+		return []string{one}, nil
+	}
+
+	var many []string
+	if err := json.Unmarshal(raw, &many); err == nil {
+		out := make([]string, 0, len(many))
+		for _, c := range many {
+			if strings.TrimSpace(c) == "" {
+				continue
+			}
+			out = append(out, c)
+		}
+		return out, nil
+	}
+
+	return nil, errors.New("setup-worktree value must be a string or array of strings")
 }
 
 // runCommands executes each command in cwd via `sh -c`, with ROOT_WORKTREE_PATH

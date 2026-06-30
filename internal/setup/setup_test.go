@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/kyriacos/go-gwt/internal/config"
@@ -21,6 +22,47 @@ func writeWorktreesJSON(t *testing.T, root, body string) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, "worktrees.json"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadSetupCommands_StringValue(t *testing.T) {
+	root := t.TempDir()
+	writeWorktreesJSON(t, root, `{
+	  "setup-worktree": "bash .cursor/setup-worktree-unix.sh"
+	}`)
+
+	cmds, err := loadCursorSetupCommands(root)
+	if err != nil {
+		t.Fatalf("loadCursorSetupCommands: %v", err)
+	}
+	want := []string{"bash .cursor/setup-worktree-unix.sh"}
+	if len(cmds) != len(want) {
+		t.Fatalf("got %d cmds %v, want %d %v", len(cmds), cmds, len(want), want)
+	}
+	for i := range want {
+		if cmds[i] != want[i] {
+			t.Errorf("cmd[%d] = %q, want %q", i, cmds[i], want[i])
+		}
+	}
+}
+
+func TestLoadSetupCommands_UnixPrecedence(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix key precedence is not tested on windows")
+	}
+	root := t.TempDir()
+	writeWorktreesJSON(t, root, `{
+	  "setup-worktree-unix": ["echo unix"],
+	  "setup-worktree": ["echo generic"]
+	}`)
+
+	cmds, err := loadCursorSetupCommands(root)
+	if err != nil {
+		t.Fatalf("loadCursorSetupCommands: %v", err)
+	}
+	want := []string{"echo unix"}
+	if len(cmds) != len(want) || cmds[0] != want[0] {
+		t.Fatalf("got %v, want %v", cmds, want)
 	}
 }
 
