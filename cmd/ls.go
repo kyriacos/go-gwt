@@ -15,6 +15,8 @@ func newLsCmd() *cobra.Command {
 		Use:     "ls",
 		Aliases: []string{"list"},
 		Short:   "List worktrees for this repo, color-coded by state",
+		Long:    lsLong,
+		Example: lsExample,
 		Args:    cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
 			d, err := build()

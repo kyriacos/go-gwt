@@ -27,6 +27,9 @@ func TestInitSupportedShells(t *testing.T) {
 					t.Errorf("Init(%q) script missing switch verb %q", sh, verb)
 				}
 			}
+			if !strings.Contains(script, "--help") {
+				t.Errorf("Init(%q) script should pass through --help", sh)
+			}
 		})
 	}
 }

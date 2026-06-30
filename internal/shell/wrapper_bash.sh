@@ -15,6 +15,13 @@
 gwt() {
   case "$1" in
     new|from|co|checkout|search|pick|dashboard|"")
+      local a
+      for a in "$@"; do
+        if [[ "$a" == -h || "$a" == --help ]]; then
+          command gwt "$@"
+          return
+        fi
+      done
       local out
       out="$(command gwt "$@")" || return
       if [[ -z "$out" ]]; then

@@ -120,6 +120,39 @@ func (m *model) seed(t *testing.T) {
 
 // ---- tests ----------------------------------------------------------------
 
+func TestBranchPickerPreviewUpdates(t *testing.T) {
+	t.Parallel()
+	items := []BranchItem{
+		{Name: "main", State: git.StateActive},
+		{Name: "feature", State: git.StateLocal},
+	}
+	m := newBranchModel(items, func(branch string) (string, error) {
+		return "log for " + branch, nil
+	})
+	m.width, m.height = 100, 30
+	m.previewBranch = "main"
+
+	next, _ := m.Update(branchPreviewMsg{branch: "main", text: "log for main"})
+	m = next.(*branchModel)
+	if m.previewText != "log for main" {
+		t.Fatalf("preview not applied: %q", m.previewText)
+	}
+
+	next, cmd := m.Update(KeyMsg{Type: keyDown})
+	m = next.(*branchModel)
+	if cmd == nil {
+		t.Fatal("cursor move should reload preview")
+	}
+	if got := cmd().(branchPreviewMsg).branch; got != "feature" {
+		t.Fatalf("preview cmd for wrong branch: %q", got)
+	}
+
+	view := m.View()
+	if !strings.Contains(view, "Log") {
+		t.Fatalf("split view missing preview header: %q", view)
+	}
+}
+
 func TestStatusMessagesPopulateRows(t *testing.T) {
 	t.Parallel()
 	m, _ := newTestModel(false)

@@ -16,9 +16,9 @@ func newRmCmd() *cobra.Command {
 		Use:     "rm [name]",
 		Aliases: []string{"remove"},
 		Short:   "Remove a worktree (optionally deleting its branch)",
-		Long: "Remove a worktree. With no name, removes the one you are standing in.\n" +
-			"-f discards uncommitted changes; -d also deletes the local branch (-D force-deletes).",
-		Args: cobra.MaximumNArgs(1),
+		Long:    rmLong,
+		Example: rmExample,
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := build()
 			if err != nil {

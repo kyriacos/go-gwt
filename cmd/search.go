@@ -8,7 +8,7 @@ import (
 )
 
 func runSearch(d *deps) error {
-	if fzf.Available() {
+	if !forceTUI && fzf.Available() {
 		lines, _, err := fzf.BuildWorktreeLines(d.repo)
 		if err != nil {
 			return err
@@ -30,6 +30,8 @@ func newSearchCmd() *cobra.Command {
 		Use:     "search",
 		Aliases: []string{"pick"},
 		Short:   "Fuzzy-search worktrees and print the chosen path",
+		Long:    searchLong,
+		Example: searchExample,
 		Args:    cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
 			d, err := build()

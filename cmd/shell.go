@@ -12,14 +12,10 @@ import (
 func newShellInitCmd() *cobra.Command {
 	var name string
 	c := &cobra.Command{
-		Use:   "shell-init <" + strings.Join(shell.Shells(), "|") + ">",
-		Short: "Print the shell wrapper that lets gwt cd for you",
-		Long: "Emit a shell function wrapper. Add it to your shell rc, e.g.\n" +
-			"  eval \"$(gwt shell-init zsh)\"          # zsh/bash\n" +
-			"  gwt shell-init fish | source          # fish\n\n" +
-			"Use --name when the binary is installed under a different name, so the\n" +
-			"wrapper function and the command it calls match it:\n" +
-			"  eval \"$(gogwt shell-init zsh --name gogwt)\"",
+		Use:     "shell-init <" + strings.Join(shell.Shells(), "|") + ">",
+		Short:   "Print the shell wrapper that lets gwt cd for you",
+		Long:    shellInitLong,
+		Example: shellInitExample,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: shell.Shells(),
 		RunE: func(_ *cobra.Command, args []string) error {

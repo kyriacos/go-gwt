@@ -23,9 +23,11 @@ func parsePRNumber(s string) (int, error) {
 
 func newPruneCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "prune",
-		Short: "Prune stale worktree metadata",
-		Args:  cobra.NoArgs,
+		Use:     "prune",
+		Short:   "Prune stale worktree metadata",
+		Long:    pruneLong,
+		Example: pruneExample,
+		Args:    cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
 			d, err := build()
 			if err != nil {
@@ -39,10 +41,13 @@ func newPruneCmd() *cobra.Command {
 // newPassthroughCmd builds a command that execs git with fixed leading args
 // plus any extra user args, inheriting stdio for a normal terminal experience.
 // Used for st (status) and log.
-func newPassthroughCmd(use, short string, gitArgs []string) *cobra.Command {
+func newPassthroughCmd(use, short, long, example string, gitArgs []string, aliases ...string) *cobra.Command {
 	return &cobra.Command{
 		Use:                use + " [git args...]",
+		Aliases:            aliases,
 		Short:              short,
+		Long:               long,
+		Example:            example,
 		DisableFlagParsing: true,
 		RunE: func(_ *cobra.Command, args []string) error {
 			full := append(append([]string{}, gitArgs...), args...)

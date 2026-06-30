@@ -62,6 +62,15 @@ func gitPreview(runner exec.Runner) tui.PreviewFunc {
 	}
 }
 
+// branchPreview returns a BranchPreviewFunc that renders recent commits on a branch.
+func branchPreview(runner exec.Runner) tui.BranchPreviewFunc {
+	return func(branch string) (string, error) {
+		out, _, err := runner.Run(context.Background(), "",
+			"git", "log", "--oneline", "--graph", "--decorate", "--color=always", "-n", "10", branch)
+		return string(out), err
+	}
+}
+
 // runDashboard launches the TUI and, if the user selected a worktree, prints
 // its path to stdout (the cd contract).
 func runDashboard() error {
@@ -82,9 +91,11 @@ func runDashboard() error {
 
 func newDashboardCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "dashboard",
-		Short: "Open the interactive worktree dashboard",
-		Args:  cobra.NoArgs,
+		Use:     "dashboard",
+		Short:   "Open the interactive worktree dashboard",
+		Long:    dashboardLong,
+		Example: dashboardExample,
+		Args:    cobra.NoArgs,
 		RunE:  func(*cobra.Command, []string) error { return runDashboard() },
 	}
 }

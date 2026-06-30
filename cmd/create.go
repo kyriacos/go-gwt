@@ -25,7 +25,7 @@ func branchArg(d *deps, args []string, populateVerb string) (string, error) {
 // argument). When fzf is available, emits GWT_POPULATE for shell review (bash
 // parity). Returns "" if the user cancels.
 func pickBranch(d *deps, populateVerb string) (string, error) {
-	if fzf.Available() {
+	if !forceTUI && fzf.Available() {
 		lines, err := fzf.BuildBranchLines(d.repo)
 		if err != nil {
 			return "", err
@@ -52,7 +52,7 @@ func pickBranch(d *deps, populateVerb string) (string, error) {
 	for i, n := range names {
 		items[i] = tui.BranchItem{Name: n, State: states[n]}
 	}
-	return tui.PickBranch(items)
+	return tui.PickBranch(items, branchPreview(d.runner))
 }
 
 // createFlags are the options shared by new/from/co/pr.
@@ -115,9 +115,11 @@ func (f *createFlags) createOpts(name, base string, newBranch bool) worktree.Cre
 func newNewCmd() *cobra.Command {
 	var f createFlags
 	c := &cobra.Command{
-		Use:   "new <name> [base]",
-		Short: "Create a worktree on a new branch",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:     "new <name> [base]",
+		Short:   "Create a worktree on a new branch",
+		Long:    newLong,
+		Example: newExample,
+		Args:    cobra.RangeArgs(1, 2),
 		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := build()
 			if err != nil {
@@ -142,9 +144,11 @@ func newNewCmd() *cobra.Command {
 func newFromCmd() *cobra.Command {
 	var f createFlags
 	c := &cobra.Command{
-		Use:   "from [branch]",
-		Short: "Create a worktree for an existing branch (no arg opens a picker)",
-		Args:  cobra.MaximumNArgs(1),
+		Use:     "from [branch]",
+		Short:   "Create a worktree for an existing branch (no arg opens a picker)",
+		Long:    fromLong,
+		Example: fromExample,
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := build()
 			if err != nil {
@@ -172,6 +176,8 @@ func newCoCmd() *cobra.Command {
 		Use:     "co [name]",
 		Aliases: []string{"checkout"},
 		Short:   "Switch to a worktree, creating it from a branch if needed (no arg opens a picker)",
+		Long:    coLong,
+		Example: coExample,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := build()
@@ -197,9 +203,11 @@ func newCoCmd() *cobra.Command {
 func newPRCmd() *cobra.Command {
 	var f createFlags
 	c := &cobra.Command{
-		Use:   "pr <number>",
-		Short: "Check out a GitHub PR into a fresh worktree",
-		Args:  cobra.ExactArgs(1),
+		Use:     "pr <number>",
+		Short:   "Check out a GitHub PR into a fresh worktree",
+		Long:    prLong,
+		Example: prExample,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := build()
 			if err != nil {

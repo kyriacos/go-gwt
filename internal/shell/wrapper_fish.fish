@@ -14,6 +14,12 @@
 function gwt
     switch "$argv[1]"
         case new from co checkout search pick dashboard ''
+            for a in $argv
+                if test "$a" = -h -o "$a" = --help
+                    command gwt $argv
+                    return
+                end
+            end
             set -l out (command gwt $argv)
             or return
             if test -z "$out"

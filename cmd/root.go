@@ -19,6 +19,10 @@ var versionInfo struct {
 	version, commit, date string
 }
 
+// forceTUI makes interactive pickers use the built-in Bubble Tea UI instead of
+// fzf when both are available.
+var forceTUI bool
+
 // deps bundles the assembled dependencies handed to command bodies.
 type deps struct {
 	runner exec.Runner
@@ -47,7 +51,8 @@ func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "gwt",
 		Short:         "git worktree helper with a TUI and gh integration",
-		Long:          "gwt manages git worktrees as siblings of the repo, with a live dashboard and gh PR checkout.",
+		Long:          rootLong,
+		Example:       rootExample,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Apply the color policy before any command runs.
@@ -70,7 +75,8 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
-	root.PersistentFlags().String("color", "always", "color output: auto|always|never")
+	root.PersistentFlags().String("color", "always", "color output: always|auto|never")
+	root.PersistentFlags().BoolVar(&forceTUI, "tui", false, "use built-in TUI pickers (with log preview) instead of fzf")
 
 	root.AddCommand(
 		newNewCmd(),
@@ -82,19 +88,22 @@ func NewRootCmd() *cobra.Command {
 		newSearchCmd(),
 		newCleanCmd(),
 		newPruneCmd(),
-		newPassthroughCmd("st", "git status (short) for the current worktree", []string{"status", "-sb"}),
-		newPassthroughCmd("log", "git log (oneline graph) for the current worktree", []string{"log", "--oneline", "--graph", "--decorate", "-n", "20"}),
+		newPassthroughCmd("st", "git status (short) for the current worktree", stLong, stExample, []string{"status", "-sb"}, "status"),
+		newPassthroughCmd("log", "git log (oneline graph) for the current worktree", logLong, logExample, []string{"log", "--oneline", "--graph", "--decorate", "-n", "20"}),
 		newDashboardCmd(),
 		newShellInitCmd(),
 		newVersionCmd(),
 	)
+	initHelp(root)
 	return root
 }
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "version",
-		Short: "Print version information",
+		Use:     "version",
+		Short:   "Print version information",
+		Long:    versionLong,
+		Example: versionExample,
 		Run: func(*cobra.Command, []string) {
 			fmt.Printf("gwt %s (commit %s, built %s)\n",
 				versionInfo.version, versionInfo.commit, versionInfo.date)

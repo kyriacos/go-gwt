@@ -16,18 +16,20 @@ import (
 
 // pickerStyles are the lipgloss styles shared by the pickers.
 type pickerStyles struct {
-	title, sel, help, dim, pane          lipgloss.Style
-	green, blue, red, yellow, mark, gray lipgloss.Style
+	title, sel, help, dim, pane, previewPane, errText lipgloss.Style
+	green, blue, red, yellow, mark, gray              lipgloss.Style
 }
 
 func newPickerStyles() pickerStyles {
 	c := func(code string) lipgloss.Style { return lipgloss.NewStyle().Foreground(lipgloss.Color(code)) }
 	return pickerStyles{
-		title:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")),
-		sel:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("6")),
-		help:   lipgloss.NewStyle().Faint(true),
-		dim:    lipgloss.NewStyle().Faint(true),
-		pane:   lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")),
+		title:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")),
+		sel:         lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("6")),
+		help:        lipgloss.NewStyle().Faint(true),
+		dim:         lipgloss.NewStyle().Faint(true),
+		pane:        lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")),
+		previewPane: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")),
+		errText:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
 		green:  c("2"),
 		blue:   c("4"),
 		red:    c("1"),
@@ -72,10 +74,14 @@ type BranchItem struct {
 	State string // git.State* (active|local|gone)
 }
 
+// BranchPreviewFunc returns commit log text for a branch name. A nil func
+// disables the preview pane.
+type BranchPreviewFunc func(branch string) (string, error)
+
 // PickBranch shows a full-screen branch picker and returns the chosen branch
 // name, or "" if the user quit without selecting.
-func PickBranch(items []BranchItem) (string, error) {
-	final, err := runModel(newBranchModel(items))
+func PickBranch(items []BranchItem, preview BranchPreviewFunc) (string, error) {
+	final, err := runModel(newBranchModel(items, preview))
 	if err != nil {
 		return "", err
 	}
@@ -95,12 +101,51 @@ type branchModel struct {
 	quitting      bool
 	width, height int
 	st            pickerStyles
+	preview       BranchPreviewFunc
+	previewBranch string
+	previewText   string
+	previewErr    string
+	spinFrame     int
 }
 
-func newBranchModel(items []BranchItem) *branchModel {
-	m := &branchModel{items: items, width: 80, height: 24, st: newPickerStyles()}
+func newBranchModel(items []BranchItem, preview BranchPreviewFunc) *branchModel {
+	m := &branchModel{items: items, preview: preview, width: 80, height: 24, st: newPickerStyles()}
 	m.applyFilter()
 	return m
+}
+
+// branchPreviewMsg carries async preview text for a branch.
+type branchPreviewMsg struct {
+	branch string
+	text   string
+	err    error
+}
+
+func loadBranchPreview(fn BranchPreviewFunc, branch string) Cmd {
+	if fn == nil {
+		return nil
+	}
+	return func() Msg {
+		txt, err := fn(branch)
+		return branchPreviewMsg{branch: branch, text: txt, err: err}
+	}
+}
+
+func (m *branchModel) previewCmd() Cmd {
+	if m.preview == nil || len(m.filtered) == 0 {
+		return nil
+	}
+	if m.cursor < 0 || m.cursor >= len(m.filtered) {
+		return nil
+	}
+	branch := m.items[m.filtered[m.cursor]].Name
+	if branch == m.previewBranch && m.previewText != "" {
+		return nil
+	}
+	m.previewBranch = branch
+	m.previewText = ""
+	m.previewErr = ""
+	return loadBranchPreview(m.preview, branch)
 }
 
 func (m *branchModel) applyFilter() {
@@ -119,10 +164,31 @@ func (m *branchModel) applyFilter() {
 	}
 }
 
-func (m *branchModel) Init() Cmd { return nil }
+func (m *branchModel) Init() Cmd {
+	if m.preview == nil {
+		return nil
+	}
+	return Batch(m.previewCmd(), tick())
+}
 
 func (m *branchModel) Update(msg Msg) (Model, Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		m.spinFrame++
+		if m.preview != nil {
+			return m, tick()
+		}
+		return m, nil
+	case branchPreviewMsg:
+		if msg.branch == m.previewBranch {
+			m.previewText = msg.text
+			if msg.err != nil {
+				m.previewErr = msg.err.Error()
+			} else {
+				m.previewErr = ""
+			}
+		}
+		return m, nil
 	case windowSizeMsg:
 		m.width, m.height = msg.width, msg.height
 		return m, nil
@@ -152,7 +218,7 @@ func (m *branchModel) filterKey(k KeyMsg) (Model, Cmd) {
 		m.filter += string(k.Runes)
 		m.applyFilter()
 	}
-	return m, nil
+	return m, m.previewCmd()
 }
 
 func (m *branchModel) listKey(k KeyMsg) (Model, Cmd) {
@@ -163,8 +229,10 @@ func (m *branchModel) listKey(k KeyMsg) (Model, Cmd) {
 		return m, Quit
 	case k.Type == keyUp, s == "k":
 		m.move(-1)
+		return m, m.previewCmd()
 	case k.Type == keyDown, s == "j":
 		m.move(1)
+		return m, m.previewCmd()
 	case s == "/":
 		m.filtering = true
 	case k.Type == keyEnter:
@@ -194,6 +262,13 @@ func (m *branchModel) View() string {
 	if m.quitting {
 		return ""
 	}
+	if m.preview != nil {
+		return m.viewWithPreview()
+	}
+	return m.viewListOnly()
+}
+
+func (m *branchModel) viewListOnly() string {
 	innerW := m.width - 2
 	if innerW < 10 {
 		innerW = 10
@@ -202,8 +277,35 @@ func (m *branchModel) View() string {
 	if innerH < 3 {
 		innerH = 3
 	}
-	st := m.st
+	body := m.st.pane.Width(innerW).Height(innerH).
+		Render(fitBlock(m.renderList(innerW, innerH), innerW, innerH))
+	return body + "\n\n" + m.footer()
+}
 
+func (m *branchModel) viewWithPreview() string {
+	innerH := m.height - footerH - 2
+	if innerH < 3 {
+		innerH = 3
+	}
+	listW := m.width*45/100 - 2
+	if listW < 20 {
+		listW = 20
+	}
+	prevW := m.width - 4 - listW
+	if prevW < 16 {
+		prevW = 16
+	}
+	st := m.st
+	left := st.pane.Width(listW).Height(innerH).
+		Render(fitBlock(m.renderList(listW, innerH), listW, innerH))
+	right := st.previewPane.Width(prevW).Height(innerH).
+		Render(fitBlock(m.renderPreview(prevW, innerH), prevW, innerH))
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	return body + "\n\n" + m.footer()
+}
+
+func (m *branchModel) renderList(innerW, innerH int) string {
+	st := m.st
 	var lines []string
 	lines = append(lines, st.title.Render(fmt.Sprintf("Select a branch (%d)", len(m.items))), "")
 	if len(m.filtered) == 0 {
@@ -227,13 +329,31 @@ func (m *branchModel) View() string {
 		}
 		lines = append(lines, cursor+st.state(it.State).Render(name))
 	}
+	return strings.Join(lines, "\n")
+}
 
-	body := st.pane.Width(innerW).Height(innerH).Render(fitBlock(strings.Join(lines, "\n"), innerW, innerH))
-	footer := st.help.Render("enter select  / filter  ↑/↓ or j/k move  q quit")
-	if m.filtering {
-		footer = st.title.Render("/" + m.filter + "▌")
+func (m *branchModel) renderPreview(width, height int) string {
+	st := m.st
+	header := st.title.Render("Log") + "\n\n"
+	if len(m.filtered) == 0 {
+		return header + st.dim.Render("no selection")
 	}
-	return body + "\n\n" + footer
+	switch {
+	case m.previewErr != "":
+		return header + st.errText.Render(m.previewErr)
+	case m.previewText == "":
+		return header + st.dim.Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]+" loading preview…")
+	default:
+		return header + m.previewText
+	}
+}
+
+func (m *branchModel) footer() string {
+	st := m.st
+	if m.filtering {
+		return st.title.Render("/" + m.filter + "▌")
+	}
+	return st.help.Render("enter select  / filter  ↑/↓ or j/k move  q quit")
 }
 
 // ---- clean multi-select picker --------------------------------------------

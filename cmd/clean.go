@@ -16,9 +16,11 @@ func newCleanCmd() *cobra.Command {
 		dryRun bool
 	)
 	c := &cobra.Command{
-		Use:   "clean",
-		Short: "Remove worktrees: interactive multi-select, or --merged for a non-interactive sweep",
-		Args:  cobra.NoArgs,
+		Use:     "clean",
+		Short:   "Remove worktrees: interactive multi-select, or --merged for a non-interactive sweep",
+		Long:    cleanLong,
+		Example: cleanExample,
+		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			d, err := build()
 			if err != nil {
@@ -38,7 +40,7 @@ func newCleanCmd() *cobra.Command {
 // cleanInteractive opens the multi-select picker (stale entries pre-marked) and
 // removes whatever the user confirms, deleting branches of stale worktrees.
 func cleanInteractive(d *deps) error {
-	if fzf.Available() {
+	if !forceTUI && fzf.Available() {
 		return cleanInteractiveFzf(d)
 	}
 	return cleanInteractiveTUI(d)
