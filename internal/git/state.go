@@ -51,7 +51,7 @@ func (r *CmdRepo) BranchStates() (map[string]string, error) {
 		}
 		switch {
 		case strings.Contains(track, "gone"):
-			states[name] = StateGone
+			states[name] = r.classifyGoneUpstream(upstream)
 		case upstream == "":
 			states[name] = StateLocal
 		default:
@@ -82,4 +82,34 @@ func ClassifyWorktree(wt Worktree, branchStates map[string]string) string {
 func pathExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+// classifyGoneUpstream maps git's [gone] upstream track to a worktree state.
+// When the remote branch no longer exists, git cannot tell "never pushed" from
+// "remote deleted after merge"; treating a missing remote as local-only avoids
+// marking active work as stale.
+func (r *CmdRepo) classifyGoneUpstream(upstream string) string {
+	remote, branch, ok := parseUpstreamRef(upstream)
+	if !ok {
+		return StateGone
+	}
+	exists, err := r.RemoteBranchExists(remote, branch)
+	if err != nil || !exists {
+		return StateLocal
+	}
+	return StateGone
+}
+
+// parseUpstreamRef splits refs/remotes/<remote>/<branch>.
+func parseUpstreamRef(upstream string) (remote, branch string, ok bool) {
+	const prefix = "refs/remotes/"
+	if !strings.HasPrefix(upstream, prefix) {
+		return "", "", false
+	}
+	rest := strings.TrimPrefix(upstream, prefix)
+	remote, branch, found := strings.Cut(rest, "/")
+	if !found || remote == "" || branch == "" {
+		return "", "", false
+	}
+	return remote, branch, true
 }

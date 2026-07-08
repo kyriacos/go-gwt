@@ -419,15 +419,11 @@ func TestSwitch_ClearsInheritedMainUpstream(t *testing.T) {
 	if _, err := svc.Switch("feat", CreateOpts{}); err != nil {
 		t.Fatal(err)
 	}
-	if len(repo.upstreamSets) != 1 {
-		t.Fatalf("upstreamSets = %+v, want one set", repo.upstreamSets)
+	if len(repo.upstreamSets) != 0 {
+		t.Fatalf("upstreamSets = %+v, want none when remote branch is missing", repo.upstreamSets)
 	}
-	got := repo.upstreamSets[0]
-	if got.branch != "feat" || got.remote != "origin" || got.upstreamBranch != "feat" {
-		t.Fatalf("upstream set = %+v", got)
-	}
-	if len(repo.upstreamUnsets) != 0 {
-		t.Fatalf("upstreamUnsets = %v, want none", repo.upstreamUnsets)
+	if len(repo.upstreamUnsets) != 1 {
+		t.Fatalf("upstreamUnsets = %v, want one unset of inherited main upstream", repo.upstreamUnsets)
 	}
 }
 
@@ -438,6 +434,34 @@ func TestCreate_AlignsUpstreamForNewBranch(t *testing.T) {
 	repo := &fakeRepo{
 		main:      main,
 		worktrees: []git.Worktree{{Path: main, Branch: "main", IsMain: true}},
+		branchUpstreams: map[string]struct {
+			remote string
+			branch string
+		}{
+			"feature": {remote: "origin", branch: "main"},
+		},
+	}
+	svc := newService(t, repo, config.Defaults())
+
+	if _, err := svc.Create(CreateOpts{Name: "feature", NewBranch: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.upstreamSets) != 0 {
+		t.Fatalf("upstreamSets = %+v, want none when remote branch is missing", repo.upstreamSets)
+	}
+	if len(repo.upstreamUnsets) != 1 {
+		t.Fatalf("upstreamUnsets = %v, want one unset of inherited main upstream", repo.upstreamUnsets)
+	}
+}
+
+func TestCreate_AlignsUpstreamWhenRemoteExists(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	main := filepath.Join(tmp, "repo")
+	repo := &fakeRepo{
+		main:           main,
+		worktrees:      []git.Worktree{{Path: main, Branch: "main", IsMain: true}},
+		remoteBranches: map[string]bool{"origin/feature": true},
 		branchUpstreams: map[string]struct {
 			remote string
 			branch string

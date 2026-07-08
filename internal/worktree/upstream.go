@@ -43,6 +43,16 @@ func (s *Service) alignDefaultBranchUpstream(branch, def string) error {
 }
 
 func (s *Service) alignFeatureBranchUpstream(branch string) error {
+	exists, err := s.Repo.RemoteBranchExists(upstreamRemote, branch)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		// Leave branches without a live remote ref untracked so the UI shows
+		// them as local-only. Proactively setting upstream before the first push
+		// makes git report [gone] even though nothing was ever published.
+		return s.unsetUpstreamIfConfigured(branch)
+	}
 	return s.setUpstreamIfNeeded(branch, upstreamRemote, branch)
 }
 
