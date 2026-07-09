@@ -56,6 +56,16 @@ func (r *CmdRepo) SetUpstream(branch, remote, upstreamBranch string) error {
 	return err
 }
 
+// UpstreamGone reports whether git marks the branch upstream as deleted.
+func (r *CmdRepo) UpstreamGone(branch string) (bool, error) {
+	track, err := r.git("", "git for-each-ref upstream track",
+		"for-each-ref", "--format=%(upstream:track)", "refs/heads/"+branch)
+	if err != nil {
+		return false, err
+	}
+	return strings.Contains(track, "gone"), nil
+}
+
 // UnsetUpstream clears the upstream configuration for branch.
 func (r *CmdRepo) UnsetUpstream(branch string) error {
 	_, err := r.git("", "git branch --unset-upstream", "branch", "--unset-upstream", branch)

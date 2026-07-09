@@ -48,6 +48,14 @@ func (s *Service) alignFeatureBranchUpstream(branch string) error {
 		return err
 	}
 	if !exists {
+		gone, err := s.Repo.UpstreamGone(branch)
+		if err != nil {
+			return err
+		}
+		if gone {
+			// Remote was deleted after a push; keep upstream so the UI shows gone.
+			return nil
+		}
 		// Leave branches without a live remote ref untracked so the UI shows
 		// them as local-only. Proactively setting upstream before the first push
 		// makes git report [gone] even though nothing was ever published.

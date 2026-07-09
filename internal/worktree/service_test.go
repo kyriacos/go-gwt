@@ -29,6 +29,7 @@ type fakeRepo struct {
 	}
 	upstreamSets   []upstreamSetCall
 	upstreamUnsets []string
+	upstreamGone   map[string]bool // branch -> git upstream:track is [gone]
 
 	addCalls    []git.AddOpts
 	removeCalls []string
@@ -125,6 +126,12 @@ func (f *fakeRepo) UnsetUpstream(branch string) error {
 	f.upstreamUnsets = append(f.upstreamUnsets, branch)
 	delete(f.branchUpstreams, branch)
 	return nil
+}
+func (f *fakeRepo) UpstreamGone(branch string) (bool, error) {
+	if f.upstreamGone == nil {
+		return false, nil
+	}
+	return f.upstreamGone[branch], nil
 }
 func (f *fakeRepo) DiskUsage(path string) (int64, error) { return 0, nil }
 
@@ -393,6 +400,38 @@ func TestSwitch_SetsUpstreamForBranch(t *testing.T) {
 	got := repo.upstreamSets[0]
 	if got.branch != "feat" || got.remote != "origin" || got.upstreamBranch != "feat" {
 		t.Fatalf("upstream set = %+v", got)
+	}
+}
+
+func TestSwitch_PreservesGoneUpstream(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	main := filepath.Join(tmp, "repo")
+	existing := filepath.Join(tmp, "repo-old")
+	repo := &fakeRepo{
+		main: main,
+		worktrees: []git.Worktree{
+			{Path: main, Branch: "main", IsMain: true},
+			{Path: existing, Branch: "old"},
+		},
+		branchUpstreams: map[string]struct {
+			remote string
+			branch string
+		}{
+			"old": {remote: "origin", branch: "old"},
+		},
+		upstreamGone: map[string]bool{"old": true},
+	}
+	svc := newService(t, repo, config.Defaults())
+
+	if _, err := svc.Switch("old", CreateOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.upstreamSets) != 0 {
+		t.Fatalf("upstreamSets = %+v, want none for gone branch", repo.upstreamSets)
+	}
+	if len(repo.upstreamUnsets) != 0 {
+		t.Fatalf("upstreamUnsets = %v, want none for gone branch", repo.upstreamUnsets)
 	}
 }
 

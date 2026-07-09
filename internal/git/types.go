@@ -60,6 +60,7 @@ type Repo interface {
 	DefaultBranch() (string, error) // e.g. main/master via origin/HEAD
 	RemoteBranchExists(remote, branch string) (bool, error)
 	BranchUpstream(branch string) (remote, upstreamBranch string, configured bool, err error)
+	UpstreamGone(branch string) (bool, error) // git marks upstream:track as [gone]
 	SetUpstream(branch, remote, upstreamBranch string) error
 	UnsetUpstream(branch string) error
 	DiskUsage(path string) (int64, error)

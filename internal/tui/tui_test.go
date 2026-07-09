@@ -43,6 +43,7 @@ func (f *fakeRepo) BranchUpstream(string) (string, string, bool, error) {
 }
 func (f *fakeRepo) SetUpstream(string, string, string) error { return nil }
 func (f *fakeRepo) UnsetUpstream(string) error               { return nil }
+func (f *fakeRepo) UpstreamGone(string) (bool, error)        { return false, nil }
 func (f *fakeRepo) DiskUsage(p string) (int64, error)        { return f.sizes[p], nil }
 
 type fakeGH struct {
