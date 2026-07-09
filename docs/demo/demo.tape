@@ -2,7 +2,7 @@
 #
 # Regenerate the gif:
 #   brew install vhs          # needs ttyd + ffmpeg
-#   go install .              # installs `gwt` (the demo below uses it as `gogwt`)
+#   go install .              # installs `gwt`
 #   bash docs/demo/demo-setup.sh   # builds a sample repo in /tmp/gwt-demo
 #   vhs docs/demo/demo.tape        # writes docs/demo/demo.gif
 #
@@ -11,7 +11,7 @@
 
 Output docs/demo/demo.gif
 
-Require gogwt
+Require gwt
 Require git
 
 Set Shell "bash"
@@ -27,12 +27,12 @@ Type "cd /tmp/gwt-demo/go-gwt && clear" Enter
 Show
 
 # --- ls: worktrees color-coded by state (+ legend when stale) ---
-Type "gogwt ls" Sleep 700ms Enter
+Type "gwt ls" Sleep 700ms Enter
 Sleep 3s
 Type "clear" Enter
 
 # --- the dashboard: live status, preview, navigate, filter ---
-Type "gogwt" Sleep 600ms Enter
+Type "gwt" Sleep 600ms Enter
 Sleep 2s
 Down Sleep 800ms
 Down Sleep 800ms
@@ -44,7 +44,7 @@ Sleep 1.5s
 Type "clear" Enter
 
 # --- branch picker: `from` with no argument ---
-Type "gogwt from" Sleep 600ms Enter
+Type "gwt from" Sleep 600ms Enter
 Sleep 1800ms
 Down Sleep 800ms
 Down Sleep 1s
@@ -53,7 +53,7 @@ Sleep 800ms
 Type "clear" Enter
 
 # --- clean: multi-select, stale worktrees pre-marked ---
-Type "gogwt clean" Sleep 600ms Enter
+Type "gwt clean" Sleep 600ms Enter
 Sleep 2s
 Down Sleep 800ms
 Space Sleep 1s

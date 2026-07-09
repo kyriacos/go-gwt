@@ -26,6 +26,7 @@ func (r *Runner) confirmClaude(paths []string) bool {
 	for _, p := range paths {
 		ui.Dim("  %s", p)
 	}
+	ui.Dim("Press y to run setup; Enter skips.")
 	return ui.Confirm("Run Claude worktree setup?", false)
 }
 

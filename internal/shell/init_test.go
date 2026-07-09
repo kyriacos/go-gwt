@@ -61,21 +61,21 @@ func TestInitUnknownShell(t *testing.T) {
 }
 
 func TestInitCustomName(t *testing.T) {
-	wantFn := map[string]string{"zsh": "gogwt() {", "bash": "gogwt() {", "fish": "function gogwt"}
+	wantFn := map[string]string{"zsh": "oldgwt() {", "bash": "oldgwt() {", "fish": "function oldgwt"}
 	for _, sh := range Shells() {
-		script, err := Init(sh, "gogwt")
+		script, err := Init(sh, "oldgwt")
 		if err != nil {
-			t.Fatalf("Init(%q, gogwt): %v", sh, err)
+			t.Fatalf("Init(%q, oldgwt): %v", sh, err)
 		}
 		if !strings.Contains(script, wantFn[sh]) {
-			t.Errorf("Init(%q, gogwt) missing renamed function %q", sh, wantFn[sh])
+			t.Errorf("Init(%q, oldgwt) missing renamed function %q", sh, wantFn[sh])
 		}
-		if !strings.Contains(script, "command gogwt") {
-			t.Errorf("Init(%q, gogwt) does not invoke `command gogwt`", sh)
+		if !strings.Contains(script, "command oldgwt") {
+			t.Errorf("Init(%q, oldgwt) does not invoke `command oldgwt`", sh)
 		}
 		// The GWT_POPULATE sentinel is uppercase and must survive the rename.
 		if !strings.Contains(script, "GWT_POPULATE:") {
-			t.Errorf("Init(%q, gogwt) mangled GWT_POPULATE sentinel", sh)
+			t.Errorf("Init(%q, oldgwt) mangled GWT_POPULATE sentinel", sh)
 		}
 	}
 }

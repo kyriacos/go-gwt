@@ -6,6 +6,7 @@ package exec
 import (
 	"bytes"
 	"context"
+	"os"
 	osexec "os/exec"
 )
 
@@ -32,4 +33,24 @@ func (Cmd) Run(ctx context.Context, dir, name string, args ...string) ([]byte, [
 	c.Stderr = &errb
 	err := c.Run()
 	return out.Bytes(), errb.Bytes(), err
+}
+
+// RunTTY runs a command with stdout/stderr attached to /dev/tty when available
+// so progress is visible while gwt's stdout is captured by the shell wrapper.
+// Stdin is not attached — stray Enter must not interrupt setup; use Ctrl+C.
+// Falls back to os.Stdout/os.Stderr when no tty is available.
+func (Cmd) RunTTY(ctx context.Context, dir, name string, args ...string) error {
+	c := osexec.CommandContext(ctx, name, args...)
+	c.Dir = dir
+	c.Stdin = nil // null device: do not read interactive input from the terminal
+	tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err == nil {
+		defer tty.Close()
+		c.Stdout = tty
+		c.Stderr = tty
+	} else {
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+	}
+	return c.Run()
 }

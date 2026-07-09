@@ -106,6 +106,7 @@ func (r *Runner) confirmCursor(cmds []string) bool {
 	for _, c := range cmds {
 		ui.Dim("  $ %s", c)
 	}
+	ui.Dim("Press y to run setup; Enter skips.")
 	return ui.Confirm("Run Cursor worktree setup?", false)
 }
 
@@ -149,7 +150,7 @@ func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decis
 			ui.Dim("Skipped Cursor setup-worktree commands.")
 			return nil
 		}
-		ui.Dim("Running setup-worktree from .cursor/worktrees.json ...")
+		ui.Dim("Running setup-worktree from .cursor/worktrees.json ... (Ctrl+C to cancel)")
 		r.runCursorSetupSteps(ctx, steps, root)
 		return nil
 	}
@@ -264,20 +265,42 @@ func (r *Runner) runCursorSetupSteps(ctx context.Context, steps []cursorSetupSte
 
 	for _, step := range steps {
 		ui.Dim("  $ %s", step.display)
-		var stderr []byte
 		var err error
 		if step.script {
-			_, stderr, err = r.Run.Run(ctx, step.cwd, "sh", step.cmd)
+			err = r.runSetupCommand(ctx, step.cwd, "sh", step.cmd)
 		} else {
-			_, stderr, err = r.Run.Run(ctx, step.cwd, "sh", "-c", step.cmd)
-		}
-		if len(stderr) > 0 {
-			ui.Dim("%s", string(stderr))
+			err = r.runSetupCommand(ctx, step.cwd, "sh", "-c", step.cmd)
 		}
 		if err != nil {
 			ui.Warn("  (step failed, continuing): %s", step.display)
 		}
 	}
+}
+
+// ttyRunner is implemented by the production exec.Cmd runner.
+type ttyRunner interface {
+	RunTTY(ctx context.Context, dir, name string, args ...string) error
+}
+
+// runSetupCommand executes a setup step. When a controlling terminal exists and
+// the injected runner supports it, stdout/stderr attach to /dev/tty so
+// long-running scripts (e.g. npm install) show live progress; stdin stays
+// disconnected so Enter cannot interrupt the script (Ctrl+C still can). The
+// shell wrapper captures gwt's stdout for cd, so setup output must not go
+// there. Fake runners and environments without a tty fall back to buffered
+// execution.
+func (r *Runner) runSetupCommand(ctx context.Context, dir, name string, args ...string) error {
+	if ui.HasTTY() {
+		if tr, ok := r.Run.(ttyRunner); ok {
+			return tr.RunTTY(ctx, dir, name, args...)
+		}
+	}
+
+	_, stderr, err := r.Run.Run(ctx, dir, name, args...)
+	if len(stderr) > 0 {
+		ui.Dim("%s", string(stderr))
+	}
+	return err
 }
 
 // runCommands executes each command in cwd via `sh -c`, with ROOT_WORKTREE_PATH
@@ -296,11 +319,7 @@ func (r *Runner) runCommands(ctx context.Context, cmds []string, cwd, root strin
 
 	for _, cmd := range cmds {
 		ui.Dim("  $ %s", cmd)
-		_, stderr, err := r.Run.Run(ctx, cwd, "sh", "-c", cmd)
-		if len(stderr) > 0 {
-			ui.Dim("%s", string(stderr))
-		}
-		if err != nil {
+		if err := r.runSetupCommand(ctx, cwd, "sh", "-c", cmd); err != nil {
 			ui.Warn("  (step failed, continuing): %s", cmd)
 		}
 	}

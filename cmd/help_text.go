@@ -149,10 +149,10 @@ Install once in your shell rc:
   eval "$(gwt shell-init zsh)"     # zsh / bash
   gwt shell-init fish | source     # fish
 
-Use --name when the binary is installed under a different name (e.g. gogwt).`
+Use --name when the binary is installed under a different name (e.g. oldgwt).`
 
 	shellInitExample = `  eval "$(gwt shell-init zsh)"
-  eval "$(gogwt shell-init zsh --name gogwt)"`
+  eval "$(gwt shell-init zsh --name oldgwt)"`
 
 	stLong = `Run git status -sb in the current worktree.
 

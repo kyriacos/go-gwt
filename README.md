@@ -68,10 +68,10 @@ export GWT_AUTO_LS=1          # run gwt ls after each switch
 export GWT_WORKTREE_DIR=~/wt  # default parent for new worktrees
 ```
 
-Different binary name:
+Different binary name (e.g. legacy bash `oldgwt` side-by-side):
 
 ```sh
-eval "$(gogwt shell-init zsh --name gogwt)"
+eval "$(gwt shell-init zsh --name oldgwt)"
 ```
 
 ## Configuration
