@@ -242,10 +242,20 @@ func (p *program) render() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	view := p.model.View()
+	w, h := p.size()
+	if w < 1 {
+		w = 80
+	}
+	if h < 1 {
+		h = 24
+	}
+	view = normalizeView(view, w, h)
+
 	if !p.raw() {
 		fmt.Fprint(p.out, "\x1b[2J\x1b[H"+view)
 		return
 	}
+
 	var b strings.Builder
 	b.WriteString("\x1b[H")
 	for i, line := range strings.Split(view, "\n") {

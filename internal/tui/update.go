@@ -9,8 +9,10 @@ func (m *model) Init() Cmd {
 func (m *model) Update(msg Msg) (Model, Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
+		if !m.animating() {
+			return m, nil
+		}
 		m.spinFrame++
-		// keep ticking while anything is loading or animating
 		return m, tick()
 
 	case worktreesMsg:
@@ -117,6 +119,10 @@ func (m *model) handleKey(k KeyMsg) (Model, Cmd) {
 		return m.handleConfirmKey(k)
 	case modePR:
 		return m.handlePRKey(k)
+	case modeHelp:
+		return m.handleOverlayKey(k, modeList)
+	case modeChangelog:
+		return m.handleChangelogKey(k)
 	default:
 		return m.handleListKey(k)
 	}
@@ -153,12 +159,14 @@ func (m *model) handleListKey(k KeyMsg) (Model, Cmd) {
 		return m, loadWorktrees(m.repo)
 
 	case m.keys.newWT.matches(s):
+		m.cacheOverlayBackdrop()
 		m.mode = modePrompt
 		m.promptText = ""
 		return m, nil
 
 	case m.keys.remove.matches(s):
 		if ri := m.currentRow(); ri >= 0 {
+			m.cacheOverlayBackdrop()
 			m.confirmKind = actRemove
 			m.confirmTgt = ri
 			m.mode = modeConfirm
@@ -167,6 +175,7 @@ func (m *model) handleListKey(k KeyMsg) (Model, Cmd) {
 
 	case m.keys.removeD.matches(s):
 		if ri := m.currentRow(); ri >= 0 {
+			m.cacheOverlayBackdrop()
 			m.confirmKind = actRemoveDeleteBranch
 			m.confirmTgt = ri
 			m.mode = modeConfirm
@@ -191,6 +200,17 @@ func (m *model) handleListKey(k KeyMsg) (Model, Cmd) {
 				return actionDoneMsg{verb: "open", msg: "opened " + p}
 			}
 		}
+		return m, nil
+
+	case m.keys.help.matches(s):
+		m.cacheOverlayBackdrop()
+		m.mode = modeHelp
+		return m, nil
+
+	case m.keys.changelog.matches(s):
+		m.cacheOverlayBackdrop()
+		m.mode = modeChangelog
+		m.scrollOffset = 0
 		return m, nil
 
 	case m.keys.quit.matches(s) || k.Type == keyEsc:
@@ -229,6 +249,7 @@ func (m *model) handlePromptKey(k KeyMsg) (Model, Cmd) {
 	case k.Type == keyEnter:
 		name := m.promptText
 		m.mode = modeList
+		m.clearOverlayBackdrop()
 		if name == "" {
 			return m, nil
 		}
@@ -237,6 +258,7 @@ func (m *model) handlePromptKey(k KeyMsg) (Model, Cmd) {
 	case k.Type == keyEsc:
 		m.mode = modeList
 		m.promptText = ""
+		m.clearOverlayBackdrop()
 		return m, nil
 	case k.Type == keyBackspace:
 		if n := len(m.promptText); n > 0 {
@@ -261,6 +283,7 @@ func (m *model) handleConfirmKey(k KeyMsg) (Model, Cmd) {
 		kind := m.confirmKind
 		m.mode = modeList
 		m.confirmKind = actNone
+		m.clearOverlayBackdrop()
 		if ri < 0 || ri >= len(m.rows) {
 			return m, nil
 		}
@@ -271,9 +294,59 @@ func (m *model) handleConfirmKey(k KeyMsg) (Model, Cmd) {
 	case m.keys.cancel.matches(s) || k.Type == keyEsc:
 		m.mode = modeList
 		m.confirmKind = actNone
+		m.clearOverlayBackdrop()
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m *model) handleOverlayKey(k KeyMsg, back mode) (Model, Cmd) {
+	s := k.String()
+	switch {
+	case m.keys.quit.matches(s) || k.Type == keyEsc || m.keys.help.matches(s):
+		m.mode = back
+		m.clearOverlayBackdrop()
+		return m, nil
+	case k.Type == keyCtrlC:
+		m.quitting = true
+		return m, Quit
+	}
+	return m, nil
+}
+
+func (m *model) handleChangelogKey(k KeyMsg) (Model, Cmd) {
+	s := k.String()
+	switch {
+	case m.keys.quit.matches(s) || k.Type == keyEsc || m.keys.changelog.matches(s):
+		m.mode = modeList
+		m.clearOverlayBackdrop()
+		return m, nil
+	case k.Type == keyCtrlC:
+		m.quitting = true
+		return m, Quit
+	case m.keys.up.matches(s) || k.Type == keyUp:
+		m.scrollChangelog(-1)
+		return m, nil
+	case m.keys.down.matches(s) || k.Type == keyDown:
+		m.scrollChangelog(1)
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *model) scrollChangelog(delta int) {
+	visible := m.scrollVisibleLines()
+	maxOff := len(m.changelogLines()) - visible
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	m.scrollOffset += delta
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+	if m.scrollOffset > maxOff {
+		m.scrollOffset = maxOff
+	}
 }
 
 func (m *model) handlePRKey(k KeyMsg) (Model, Cmd) {

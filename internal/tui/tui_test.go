@@ -497,6 +497,81 @@ func TestViewRendersWithoutPanic(t *testing.T) {
 	_ = m.View()
 }
 
+func TestHelpOverlay(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestModel(true)
+	m.seed(t)
+	m.width = 100
+	m.height = 40
+
+	m2, _ := m.handleListKey(KeyMsg{Type: keyRunes, Runes: []rune{'?'}})
+	if m2.(*model).mode != modeHelp {
+		t.Fatalf("want modeHelp, got %v", m2.(*model).mode)
+	}
+	out := m2.View()
+	if !strings.Contains(out, "Worktrees") {
+		t.Fatalf("help overlay should keep dashboard visible behind modal: %q", out[:min(200, len(out))])
+	}
+	if !strings.Contains(out, "worktree dashboard") {
+		t.Fatalf("help view missing body: %q", out)
+	}
+	if !strings.Contains(out, "gwt ") {
+		t.Fatalf("help view missing version: %q", out)
+	}
+
+	closed, _ := m2.(*model).handleOverlayKey(KeyMsg{Type: keyEsc}, modeList)
+	if closed.(*model).mode != modeList {
+		t.Fatal("esc should close help overlay")
+	}
+}
+
+func TestChangelogOverlayScrolls(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestModel(true)
+	m.seed(t)
+	m.width = 100
+	m.height = 12
+
+	m2, _ := m.handleListKey(KeyMsg{Type: keyRunes, Runes: []rune{'c'}})
+	if m2.(*model).mode != modeChangelog {
+		t.Fatalf("want modeChangelog, got %v", m2.(*model).mode)
+	}
+	out := m2.View()
+	if !strings.Contains(out, "Changelog") {
+		t.Fatalf("changelog view missing title: %q", out)
+	}
+
+	before := m2.(*model).scrollOffset
+	scrolled, _ := m2.(*model).handleChangelogKey(KeyMsg{Type: keyDown})
+	if scrolled.(*model).scrollOffset <= before {
+		t.Fatalf("down should increase scroll offset: before=%d after=%d", before, scrolled.(*model).scrollOffset)
+	}
+}
+
+func TestFooterVersionRightAligned(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestModel(true)
+	m.seed(t)
+	m.width = 80
+	m.height = 24
+	m.statusMsg = "refreshing"
+
+	lines := strings.Split(m.footer(), "\n")
+	if len(lines) < 1 {
+		t.Fatal("footer missing status line")
+	}
+	if !strings.Contains(lines[0], "refreshing") {
+		t.Fatalf("status line missing message: %q", lines[0])
+	}
+	if !strings.Contains(lines[0], "gwt ") {
+		t.Fatalf("status line missing version on right: %q", lines[0])
+	}
+	// version should appear after the status text (rough right-align check).
+	if strings.Index(lines[0], "refreshing") > strings.LastIndex(lines[0], "gwt") {
+		t.Fatalf("expected version to the right of status: %q", lines[0])
+	}
+}
+
 func TestConcurrencyBounded(t *testing.T) {
 	t.Parallel()
 	if got := concurrency(); got < 1 || got > 8 {

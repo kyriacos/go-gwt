@@ -53,6 +53,8 @@ type styles struct {
 	modalTitle  lipgloss.Style
 	modalDanger lipgloss.Style
 	prompt      lipgloss.Style
+	scrim       lipgloss.Style // dimmed full-screen backdrop
+	overlayModal lipgloss.Style // centered modal panel
 
 	// pr view
 	prDraft   lipgloss.Style
@@ -94,6 +96,11 @@ func newStyles() styles {
 		modalTitle:  lipgloss.NewStyle().Bold(true),
 		modalDanger: lipgloss.NewStyle().Foreground(c("1")).Bold(true),
 		prompt:      lipgloss.NewStyle().Foreground(c("6")),
+		scrim:       lipgloss.NewStyle().Faint(true),
+		overlayModal: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(c("6")).
+			Padding(1, 2),
 
 		prDraft:   lipgloss.NewStyle().Faint(true),
 		ciPassing: lipgloss.NewStyle().Foreground(c("2")),

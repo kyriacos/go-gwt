@@ -73,3 +73,27 @@ func fitBlock(content string, width, height int) string {
 	}
 	return strings.Join(out, "\n")
 }
+
+// normalizeView pads or clips content to exactly width x height lines. Carriage
+// returns from cellbuf are stripped so the render loop can split on newlines.
+func normalizeView(content string, width, height int) string {
+	if width < 1 {
+		width = 80
+	}
+	if height < 1 {
+		height = 24
+	}
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+	lines := strings.Split(content, "\n")
+	out := make([]string, height)
+	blank := strings.Repeat(" ", width)
+	for i := 0; i < height; i++ {
+		if i < len(lines) {
+			out[i] = padVis(lines[i], width)
+		} else {
+			out[i] = blank
+		}
+	}
+	return strings.Join(out, "\n")
+}

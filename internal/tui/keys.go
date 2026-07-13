@@ -43,6 +43,8 @@ type keyMap struct {
 	removeD binding
 	pr      binding
 	open    binding
+	help    binding
+	changelog binding
 	quit    binding
 	confirm binding // y in modal
 	cancel  binding // n/esc in modal
@@ -60,8 +62,10 @@ func defaultKeyMap(ghAvailable bool) keyMap {
 		remove:  newBinding("d", "remove", true, "d"),
 		removeD: newBinding("D", "remove+branch", true, "D"),
 		pr:      newBinding("p", "PRs", ghAvailable, "p"),
-		open:    newBinding("o", "open", true, "o"),
-		quit:    newBinding("q", "quit", true, "q", "esc"),
+		open:      newBinding("o", "open", true, "o"),
+		help:      newBinding("?", "help", true, "?"),
+		changelog: newBinding("c", "changelog", true, "c"),
+		quit:      newBinding("q", "quit", true, "q", "esc"),
 		confirm: newBinding("y", "yes", true, "y"),
 		cancel:  newBinding("n", "no", true, "n", "esc"),
 	}
@@ -69,7 +73,7 @@ func defaultKeyMap(ghAvailable bool) keyMap {
 
 // helpBar renders the one-line help string for the list view.
 func (k keyMap) helpBar(st styles) string {
-	parts := []binding{k.enter, k.filter, k.refresh, k.newWT, k.remove, k.removeD, k.pr, k.open, k.quit}
+	parts := []binding{k.enter, k.filter, k.refresh, k.newWT, k.remove, k.removeD, k.pr, k.open, k.help, k.changelog, k.quit}
 	var b strings.Builder
 	first := true
 	for _, bd := range parts {

@@ -63,6 +63,8 @@ const (
 	modePrompt              // typing a new-worktree branch name
 	modeConfirm             // destructive-action confirmation modal
 	modePR                  // PR list
+	modeHelp                // full-screen help overlay
+	modeChangelog           // scrollable changelog overlay
 )
 
 // pendingAction records what a confirm modal will do when accepted.
@@ -109,7 +111,9 @@ type model struct {
 
 	width, height int
 
-	statusMsg string // transient one-line message (errors, results)
+	statusMsg    string // transient one-line message (errors, results)
+	scrollOffset int    // changelog scroll position (lines from top)
+	overlayBackdrop string // frozen dashboard frame behind a modal
 
 	// result + exit
 	selectedPath string
