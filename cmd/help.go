@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/kyriacos/go-gwt/internal/ui"
+	"github.com/kyriacos/go-gwt/internal/version"
 )
 
 // helpStyles are used for colored CLI help (always on; see styledHelp).
@@ -46,6 +47,9 @@ func styledHelp(cmd *cobra.Command, _ []string) {
 	// Header: gwt co — Switch to a worktree…
 	path := cmd.CommandPath()
 	fmt.Fprintln(out, st.title.Render(path)+st.dim.Render(" — ")+cmd.Short)
+	if cmd == cmd.Root() {
+		fmt.Fprintln(out, st.dim.Render(version.Short()))
+	}
 	fmt.Fprintln(out)
 
 	if cmd.Long != "" {

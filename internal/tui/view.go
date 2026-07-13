@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/kyriacos/go-gwt/internal/version"
 )
 
 // View renders the whole screen for the current mode.
@@ -76,7 +78,7 @@ func (m *model) viewMain() string {
 // not change the overall height.
 func (m *model) footer() string {
 	st := m.styles
-	status := ""
+	status := st.dim.Render(version.Short())
 	if m.statusMsg != "" {
 		status = st.warnText.Render(m.statusMsg)
 	}

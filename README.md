@@ -12,8 +12,12 @@ land as siblings of your repo (`~/code/backend` → `~/code/backend-feature`).
 ## Install
 
 ```sh
-go install github.com/kyriacos/go-gwt@latest
+go install github.com/kyriacos/go-gwt/cmd/gwt@latest
 ```
+
+From a clone: `go install ./cmd/gwt` (installs `gwt` into `$(go env GOPATH)/bin`).
+To overwrite a binary in `~/.local/bin`: `GOBIN=~/.local/bin go install ./cmd/gwt`.
+If an older `gwt` is already on your `PATH`, remove it or put `$(go env GOPATH)/bin` first.
 
 Prebuilt binaries: [releases](https://github.com/kyriacos/go-gwt/releases).
 

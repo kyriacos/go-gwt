@@ -167,13 +167,28 @@ func (s *Service) Create(opts CreateOpts) (Result, error) {
 
 // Switch returns the path of the worktree matching name, creating it from an
 // existing branch if none exists (the `co` semantics). A match is any worktree
-// whose branch equals name or whose directory basename equals name.
+// whose branch equals name (case-insensitively) or whose directory basename
+// equals name, or whose path matches the resolved destination (handles
+// case-only directory collisions on case-insensitive filesystems).
 func (s *Service) Switch(name string, opts CreateOpts) (Result, error) {
 	wt, found, err := s.findWorktree(name)
 	if err != nil {
 		return Result{}, err
 	}
 	if found {
+		s.alignBranchUpstream(wt.Branch)
+		return Result{Path: wt.Path, Branch: wt.Branch}, nil
+	}
+
+	// On case-insensitive filesystems the resolved destination path may already
+	// be a registered worktree even when branch/basename matching failed.
+	dest, err := s.computeDest(name, opts.ParentDir)
+	if err != nil {
+		return Result{}, err
+	}
+	if wt, found, err := s.findWorktreeByPath(dest); err != nil {
+		return Result{}, err
+	} else if found {
 		s.alignBranchUpstream(wt.Branch)
 		return Result{Path: wt.Path, Branch: wt.Branch}, nil
 	}
@@ -265,15 +280,9 @@ func (s *Service) Remove(opts RemoveOpts) (Result, error) {
 	return Result{Path: target, Branch: branch}, nil
 }
 
-// ResolveDest computes the destination directory for a branch name, applying
-// the parent-dir precedence and the naming template.
-//
-// Parent precedence (highest first): parentOverride > Cfg.WorktreeDir >
-// filepath.Dir(MainWorktree()). A relative parent is resolved against the
-// current working directory and created (MkdirAll) if missing, then
-// canonicalized. The resolved destination must NOT already exist; callers rely
-// on this to detect collisions.
-func (s *Service) ResolveDest(name, parentOverride string) (string, error) {
+// computeDest resolves the destination directory for a branch name without
+// checking whether it already exists.
+func (s *Service) computeDest(name, parentOverride string) (string, error) {
 	root, err := s.Repo.MainWorktree()
 	if err != nil {
 		return "", fmt.Errorf("locate main worktree: %w", err)
@@ -305,7 +314,22 @@ func (s *Service) ResolveDest(name, parentOverride string) (string, error) {
 	}
 
 	dirName := applyTemplate(s.Cfg.Naming, root, name)
-	dest := filepath.Join(parent, dirName)
+	return filepath.Join(parent, dirName), nil
+}
+
+// ResolveDest computes the destination directory for a branch name, applying
+// the parent-dir precedence and the naming template.
+//
+// Parent precedence (highest first): parentOverride > Cfg.WorktreeDir >
+// filepath.Dir(MainWorktree()). A relative parent is resolved against the
+// current working directory and created (MkdirAll) if missing, then
+// canonicalized. The resolved destination must NOT already exist; callers rely
+// on this to detect collisions.
+func (s *Service) ResolveDest(name, parentOverride string) (string, error) {
+	dest, err := s.computeDest(name, parentOverride)
+	if err != nil {
+		return "", err
+	}
 
 	if _, err := os.Stat(dest); err == nil {
 		return "", fmt.Errorf("destination already exists: %s", dest)
@@ -393,15 +417,32 @@ func (s *Service) CleanMerged(dryRun, deleteBranch, forceDelete bool) ([]Result,
 	return results, nil
 }
 
-// findWorktree returns the worktree whose branch equals name or whose directory
-// basename equals name. found is false when no worktree matches.
+// findWorktree returns the worktree whose branch equals name (case-insensitively)
+// or whose directory basename equals name. found is false when no worktree matches.
 func (s *Service) findWorktree(name string) (git.Worktree, bool, error) {
 	wts, err := s.Repo.List()
 	if err != nil {
 		return git.Worktree{}, false, fmt.Errorf("list worktrees: %w", err)
 	}
 	for _, wt := range wts {
-		if wt.Branch == name || filepath.Base(wt.Path) == name || sameDir(wt.Path, name) {
+		if strings.EqualFold(wt.Branch, name) ||
+			strings.EqualFold(filepath.Base(wt.Path), name) ||
+			sameDir(wt.Path, name) {
+			return wt, true, nil
+		}
+	}
+	return git.Worktree{}, false, nil
+}
+
+// findWorktreeByPath returns the registered worktree at dest, comparing paths
+// case-insensitively where the filesystem does.
+func (s *Service) findWorktreeByPath(dest string) (git.Worktree, bool, error) {
+	wts, err := s.Repo.List()
+	if err != nil {
+		return git.Worktree{}, false, fmt.Errorf("list worktrees: %w", err)
+	}
+	for _, wt := range wts {
+		if sameDir(wt.Path, dest) {
 			return wt, true, nil
 		}
 	}

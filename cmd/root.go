@@ -12,12 +12,9 @@ import (
 	"github.com/kyriacos/go-gwt/internal/gh"
 	"github.com/kyriacos/go-gwt/internal/git"
 	"github.com/kyriacos/go-gwt/internal/ui"
+	"github.com/kyriacos/go-gwt/internal/version"
 	"github.com/kyriacos/go-gwt/internal/worktree"
 )
-
-var versionInfo struct {
-	version, commit, date string
-}
 
 // forceTUI and forceFzf are defined in picker.go.
 
@@ -77,6 +74,10 @@ func NewRootCmd() *cobra.Command {
 	root.PersistentFlags().BoolVar(&forceTUI, "tui", false, "use built-in TUI pickers (default; overrides --fzf)")
 	root.PersistentFlags().BoolVar(&forceFzf, "fzf", false, "use fzf pickers instead of the built-in TUI")
 
+	// Cobra adds --version when Version is non-empty.
+	root.Version = version.Version
+	root.SetVersionTemplate(version.String() + "\n")
+
 	root.AddCommand(
 		newNewCmd(),
 		newFromCmd(),
@@ -104,15 +105,13 @@ func newVersionCmd() *cobra.Command {
 		Long:    versionLong,
 		Example: versionExample,
 		Run: func(*cobra.Command, []string) {
-			fmt.Printf("gwt %s (commit %s, built %s)\n",
-				versionInfo.version, versionInfo.commit, versionInfo.date)
+			fmt.Println(version.String())
 		},
 	}
 }
 
 // Execute runs the root command. Called from main.
-func Execute(version, commit, date string) {
-	versionInfo.version, versionInfo.commit, versionInfo.date = version, commit, date
+func Execute() {
 	if err := NewRootCmd().Execute(); err != nil {
 		ui.Die("%v", err)
 	}

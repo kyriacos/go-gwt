@@ -1,5 +1,6 @@
 # Binaries
 /gwt
+/go-gwt
 /dist/
 *.exe
 

@@ -167,7 +167,10 @@ Passthrough to git; extra arguments are forwarded.`
 
 	logExample = `  gwt log`
 
-	versionLong = `Print the gwt version, git commit, and build date.`
+	versionLong = `Print the gwt version, git commit, and build date.
 
-	versionExample = `  gwt version`
+Same output as gwt --version.`
+
+	versionExample = `  gwt version
+  gwt --version`
 )

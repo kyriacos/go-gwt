@@ -39,15 +39,15 @@ func TestLoadSetupCommands_StringScriptPath(t *testing.T) {
 	if len(steps) != 1 {
 		t.Fatalf("got %d steps, want 1", len(steps))
 	}
-	wantCwd := filepath.Join(newPath, ".cursor")
+	wantCwd := newPath
 	if steps[0].cwd != wantCwd {
 		t.Errorf("cwd = %q, want %q", steps[0].cwd, wantCwd)
 	}
 	if !steps[0].script {
 		t.Error("expected script step")
 	}
-	if steps[0].cmd != "setup-worktree-unix.sh" {
-		t.Errorf("cmd = %q, want setup-worktree-unix.sh", steps[0].cmd)
+	if steps[0].cmd != filepath.Join(".cursor", "setup-worktree-unix.sh") {
+		t.Errorf("cmd = %q, want %q", steps[0].cmd, filepath.Join(".cursor", "setup-worktree-unix.sh"))
 	}
 }
 
@@ -231,7 +231,7 @@ func TestRunCursorSetup_RunsInNewPathWithEnv(t *testing.T) {
 	}
 }
 
-func TestRunCursorSetup_RunsScriptFromCursorDir(t *testing.T) {
+func TestRunCursorSetup_RunsScriptFromWorktreeRoot(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	newPath := t.TempDir()
@@ -242,8 +242,8 @@ func TestRunCursorSetup_RunsScriptFromCursorDir(t *testing.T) {
 	if err := r.RunCursorSetup(ctx, newPath, root, DecisionYes); err != nil {
 		t.Fatalf("RunCursorSetup: %v", err)
 	}
-	wantDir := filepath.Join(newPath, ".cursor")
-	wantCall := exec.Key("sh", "setup-worktree-unix.sh")
+	wantDir := newPath
+	wantCall := exec.Key("sh", filepath.Join(".cursor", "setup-worktree-unix.sh"))
 	if len(f.Calls) != 1 || f.Calls[0] != wantCall {
 		t.Fatalf("calls = %v, want [%q]", f.Calls, wantCall)
 	}

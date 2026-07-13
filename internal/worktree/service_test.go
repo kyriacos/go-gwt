@@ -376,6 +376,60 @@ func TestSwitch_CreatesWhenMissing(t *testing.T) {
 	}
 }
 
+func TestSwitch_CaseInsensitiveBranch(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	main := filepath.Join(tmp, "repo")
+	existing := filepath.Join(tmp, "repo-EPD-610")
+	repo := &fakeRepo{
+		main: main,
+		worktrees: []git.Worktree{
+			{Path: main, Branch: "main", IsMain: true},
+			{Path: existing, Branch: "EPD-610"},
+		},
+	}
+	svc := newService(t, repo, config.Defaults())
+
+	res, err := svc.Switch("epd-610", CreateOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Path != existing {
+		t.Fatalf("path = %q, want %q", res.Path, existing)
+	}
+	if len(repo.addCalls) != 0 {
+		t.Fatalf("Switch should not create when worktree exists; addCalls=%d", len(repo.addCalls))
+	}
+}
+
+func TestSwitch_ExistingDestCaseCollision(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	main := filepath.Join(tmp, "web")
+	existing := filepath.Join(tmp, "web-EPD-610")
+	repo := &fakeRepo{
+		main: main,
+		worktrees: []git.Worktree{
+			{Path: main, Branch: "main", IsMain: true},
+			{Path: existing, Branch: "EPD-610"},
+		},
+	}
+	svc := newService(t, repo, config.Defaults())
+
+	// Lowercase branch slug resolves to web-epd-610; on case-insensitive
+	// filesystems that is the same directory as web-EPD-610.
+	res, err := svc.Switch("epd-610", CreateOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Path != existing {
+		t.Fatalf("path = %q, want %q", res.Path, existing)
+	}
+	if len(repo.addCalls) != 0 {
+		t.Fatalf("Switch should not create when destination collides; addCalls=%d", len(repo.addCalls))
+	}
+}
+
 func TestSwitch_SetsUpstreamForBranch(t *testing.T) {
 	t.Parallel()
 	tmp := t.TempDir()

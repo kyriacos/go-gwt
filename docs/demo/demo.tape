@@ -2,7 +2,7 @@
 #
 # Regenerate the gif:
 #   brew install vhs          # needs ttyd + ffmpeg
-#   go install .              # installs `gwt`
+#   go install ./cmd/gwt       # installs `gwt`
 #   bash docs/demo/demo-setup.sh   # builds a sample repo in /tmp/gwt-demo
 #   vhs docs/demo/demo.tape        # writes docs/demo/demo.gif
 #

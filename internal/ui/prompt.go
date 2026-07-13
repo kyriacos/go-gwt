@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +11,7 @@ import (
 // paths). When no terminal is available it returns def without prompting, so
 // callers behave sanely under `cd "$(gwt ...)"` and in CI.
 func Confirm(question string, def bool) bool {
+	ResetTTY()
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
 		return def
@@ -24,12 +24,13 @@ func Confirm(question string, def bool) bool {
 	}
 	fmt.Fprintf(tty, "%s %s ", render(styleWarn, question), suffix)
 
-	line, err := bufio.NewReader(tty).ReadString('\n')
+	line, err := ReadTTYLine(tty)
 	if err != nil && line == "" {
 		return def
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
+		DrainTTY()
 		return true
 	case "n", "no":
 		return false

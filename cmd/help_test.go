@@ -76,6 +76,23 @@ func TestRootHelpListsCommands(t *testing.T) {
 			t.Errorf("root help missing command %q", cmd)
 		}
 	}
+	if !strings.Contains(out, "gwt ") {
+		t.Errorf("root help missing version line: %q", out)
+	}
+}
+
+func TestVersionFlag(t *testing.T) {
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetArgs([]string{"--version"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "gwt ") || !strings.Contains(out, "commit") {
+		t.Fatalf("--version output: %q", out)
+	}
 }
 
 func TestStyledUsage(t *testing.T) {

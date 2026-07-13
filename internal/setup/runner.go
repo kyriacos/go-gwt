@@ -39,8 +39,8 @@
 //	_ = r.RunHooks(ctx, setup.PreRemove, targetPath, root)
 //
 // All commands run through the injected exec.Runner, with cwd set appropriately
-// and ROOT_WORKTREE_PATH exported. Cursor script paths run from
-// <worktree>/.cursor; command arrays and user hooks run from the worktree root.
+// and ROOT_WORKTREE_PATH exported. Cursor script paths run from the worktree
+// root; command arrays and user hooks run from the worktree root.
 // failures are reported as warnings and do not abort the sequence, matching the
 // bash tool. RunCursorSetup and RunHooks return a non-nil error only for
 // setup-level problems (e.g. an unreadable worktrees.json), never for a failing
@@ -132,7 +132,7 @@ func (r *Runner) consent(decision Decision, configured config.WorktreeSetup, cmd
 // If <root>/.cursor/worktrees.json defines setup-worktree commands, they are
 // run (subject to consent) with ROOT_WORKTREE_PATH exported and the
 // $ROOT_WORKTREE_PATH token substituted. Script paths (a string value) run from
-// <newPath>/.cursor; command arrays run from newPath. With no such config,
+// the worktree root; command arrays run from newPath. With no such config,
 // RunCursorSetup falls back to copying a top-level .env from root into newPath
 // when present and not already there (this fallback is not consent-gated).
 func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decision Decision) error {
@@ -150,6 +150,7 @@ func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decis
 			ui.Dim("Skipped Cursor setup-worktree commands.")
 			return nil
 		}
+		ui.ResetTTY()
 		ui.Dim("Running setup-worktree from .cursor/worktrees.json ... (Ctrl+C to cancel)")
 		r.runCursorSetupSteps(ctx, steps, root)
 		return nil
@@ -161,8 +162,8 @@ func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decis
 }
 
 // cursorSetupStep is one Cursor worktree setup action with its working directory.
-// Script paths (string values in worktrees.json) run via `sh <path>` from
-// <worktree>/.cursor; command arrays run via `sh -c` from the worktree root.
+// Script paths (string values in worktrees.json) run via `sh <path>` from the
+// worktree root; command arrays run via `sh -c` from the worktree root.
 type cursorSetupStep struct {
 	display string
 	cwd     string
@@ -212,9 +213,9 @@ func parseCursorSetupRaw(raw json.RawMessage, newPath, root string) ([]cursorSet
 		}
 		return []cursorSetupStep{{
 			display: script,
-			cwd:     filepath.Join(newPath, ".cursor"),
+			cwd:     newPath,
 			script:  true,
-			cmd:     script,
+			cmd:     filepath.Join(".cursor", script),
 		}}, nil
 	}
 
@@ -284,23 +285,62 @@ type ttyRunner interface {
 
 // runSetupCommand executes a setup step. When a controlling terminal exists and
 // the injected runner supports it, stdout/stderr attach to /dev/tty so
-// long-running scripts (e.g. npm install) show live progress; stdin stays
-// disconnected so Enter cannot interrupt the script (Ctrl+C still can). The
-// shell wrapper captures gwt's stdout for cd, so setup output must not go
-// there. Fake runners and environments without a tty fall back to buffered
-// execution.
+// long-running scripts (e.g. npm install) show live progress; stdin stays on
+// /dev/null so Enter cannot interrupt the script (Ctrl+C still can). CI-style
+// env vars are set so package managers do not stall waiting for confirmation on
+// the tty. The shell wrapper captures gwt's stdout for cd, so setup output must
+// not go there. Fake runners and environments without a tty fall back to
+// buffered execution.
 func (r *Runner) runSetupCommand(ctx context.Context, dir, name string, args ...string) error {
-	if ui.HasTTY() {
-		if tr, ok := r.Run.(ttyRunner); ok {
-			return tr.RunTTY(ctx, dir, name, args...)
+	return withNonInteractiveEnv(func() error {
+		if ui.HasTTY() {
+			if tr, ok := r.Run.(ttyRunner); ok {
+				return tr.RunTTY(ctx, dir, name, args...)
+			}
 		}
-	}
 
-	_, stderr, err := r.Run.Run(ctx, dir, name, args...)
-	if len(stderr) > 0 {
-		ui.Dim("%s", string(stderr))
+		stdout, stderr, err := r.Run.Run(ctx, dir, name, args...)
+		if len(stdout) > 0 {
+			ui.Dim("%s", string(stdout))
+		}
+		if len(stderr) > 0 {
+			ui.Dim("%s", string(stderr))
+		}
+		return err
+	})
+}
+
+// withNonInteractiveEnv sets common non-interactive env vars for the duration of
+// fn so package managers do not block on /dev/tty prompts while stdin is closed.
+func withNonInteractiveEnv(fn func() error) error {
+	type envVal struct {
+		had bool
+		val string
 	}
-	return err
+	overrides := map[string]string{
+		"CI":                    "1",
+		"PNPM_NO_INTERACTIVE":   "1",
+		"npm_config_yes":        "true",
+		"npm_config_fund":       "false",
+		"npm_config_audit":      "false",
+	}
+	prev := make(map[string]envVal, len(overrides))
+	for k, v := range overrides {
+		if cur, ok := os.LookupEnv(k); ok {
+			prev[k] = envVal{had: true, val: cur}
+		}
+		_ = os.Setenv(k, v)
+	}
+	defer func() {
+		for k := range overrides {
+			if p, ok := prev[k]; ok {
+				_ = os.Setenv(k, p.val)
+			} else {
+				_ = os.Unsetenv(k)
+			}
+		}
+	}()
+	return fn()
 }
 
 // runCommands executes each command in cwd via `sh -c`, with ROOT_WORKTREE_PATH

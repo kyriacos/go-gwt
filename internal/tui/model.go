@@ -7,6 +7,7 @@ import (
 
 	"github.com/kyriacos/go-gwt/internal/gh"
 	"github.com/kyriacos/go-gwt/internal/git"
+	"github.com/kyriacos/go-gwt/internal/ui"
 )
 
 // Actions is the small action surface the dashboard triggers. It is satisfied
@@ -185,5 +186,6 @@ func runModel(m Model) (Model, error) {
 	if err := p.run(); err != nil {
 		return nil, err
 	}
+	ui.ResetTTY()
 	return p.model, nil
 }

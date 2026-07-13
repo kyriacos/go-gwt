@@ -37,20 +37,28 @@ func (Cmd) Run(ctx context.Context, dir, name string, args ...string) ([]byte, [
 
 // RunTTY runs a command with stdout/stderr attached to /dev/tty when available
 // so progress is visible while gwt's stdout is captured by the shell wrapper.
-// Stdin is not attached — stray Enter must not interrupt setup; use Ctrl+C.
-// Falls back to os.Stdout/os.Stderr when no tty is available.
+// Stdin is attached to /dev/null so stray Enter cannot interrupt setup; use
+// Ctrl+C. When /dev/tty is unavailable, both streams go to stderr — never to
+// stdout, which may be a pipe that would block once full.
 func (Cmd) RunTTY(ctx context.Context, dir, name string, args ...string) error {
 	c := osexec.CommandContext(ctx, name, args...)
 	c.Dir = dir
-	c.Stdin = nil // null device: do not read interactive input from the terminal
-	tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		c.Stdin = nil
+	} else {
+		c.Stdin = devNull
+		defer devNull.Close()
+	}
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err == nil {
 		defer tty.Close()
 		c.Stdout = tty
 		c.Stderr = tty
 	} else {
-		c.Stdout = os.Stdout
+		c.Stdout = os.Stderr
 		c.Stderr = os.Stderr
 	}
-	return c.Run()
+	err = c.Run()
+	return err
 }
