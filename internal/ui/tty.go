@@ -11,9 +11,8 @@ import (
 	"golang.org/x/term"
 )
 
-// ResetTTY best-effort restores the controlling terminal after a full-screen TUI
-// or other raw-mode UI. It leaves the alt screen, shows the cursor, and runs
-// stty sane so subsequent line prompts read Enter correctly.
+// ResetTTY restores the controlling terminal after the full-screen TUI exits.
+// Call only after raw-mode UI — not on every CLI invocation.
 func ResetTTY() {
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
@@ -21,7 +20,7 @@ func ResetTTY() {
 	}
 	defer tty.Close()
 
-	_, _ = fmt.Fprint(tty, "\x1b[?25h\x1b[?1049l\x1b[0m\r\n")
+	_, _ = fmt.Fprint(tty, "\x1b[?25h\x1b[?1049l\x1b[0m")
 	if !term.IsTerminal(int(tty.Fd())) {
 		return
 	}

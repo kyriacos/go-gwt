@@ -5,8 +5,11 @@ package version
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 )
 
 var (
@@ -16,6 +19,8 @@ var (
 	Commit = "none"
 	// Date is the build timestamp (RFC3339).
 	Date = "unknown"
+	// Binary is the resolved path of the running executable.
+	Binary = ""
 )
 
 // Set records link-time metadata from main.
@@ -26,11 +31,19 @@ func Set(v, commit, date string) {
 	if Commit == "" || Commit == "none" {
 		Commit = vcsRevision()
 	}
+	if date == "" || date == "unknown" {
+		Date = time.Now().UTC().Format(time.RFC3339)
+	}
+	Binary = executablePath()
 }
 
 // String is the full version line for `gwt version` and `--version`.
 func String() string {
-	return fmt.Sprintf("gwt %s (commit %s, built %s)", Version, ShortCommit(), Date)
+	line := fmt.Sprintf("gwt %s (commit %s, built %s)", Version, ShortCommit(), Date)
+	if Binary != "" {
+		line += "\n  binary: " + Binary
+	}
+	return line
 }
 
 // Short is a compact label for the TUI footer and help header.
@@ -48,9 +61,24 @@ func ShortCommit() string {
 		return "dev"
 	}
 	if len(c) > 7 {
-		return c[:7]
+		c = c[:7]
+	}
+	if vcsDirty() {
+		c += "+"
 	}
 	return c
+}
+
+func executablePath() string {
+	path, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	path, err = filepath.EvalSymlinks(path)
+	if err != nil {
+		return path
+	}
+	return path
 }
 
 func vcsRevision() string {
@@ -64,4 +92,17 @@ func vcsRevision() string {
 		}
 	}
 	return ""
+}
+
+func vcsDirty() bool {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return false
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.modified" {
+			return strings.TrimSpace(s.Value) == "true"
+		}
+	}
+	return false
 }

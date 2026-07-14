@@ -92,9 +92,11 @@ func NewRootCmd() *cobra.Command {
 		newPassthroughCmd("log", "git log (oneline graph) for the current worktree", logLong, logExample, []string{"log", "--oneline", "--graph", "--decorate", "-n", "20"}),
 		newDashboardCmd(),
 		newShellInitCmd(),
+		newDoctorCmd(),
 		newVersionCmd(),
 	)
 	initHelp(root)
+	registerCompletions(root)
 	return root
 }
 

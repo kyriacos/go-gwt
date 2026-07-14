@@ -143,15 +143,19 @@ Selecting a worktree prints its path to stdout for shell cd integration.`
 	shellInitLong = `Print a shell function wrapper for auto-cd integration.
 
 A child process cannot change the parent shell's directory. Switch verbs print
-the target path on stdout; this wrapper captures it and runs cd.
+the target path on stdout; this wrapper captures it and runs cd. The script
+pins the absolute path of the gwt binary that generated it (_GWT_BIN), so a
+stale copy elsewhere on PATH cannot be picked up silently.
 
-Install once in your shell rc:
-  eval "$(gwt shell-init zsh)"     # zsh / bash
-  gwt shell-init fish | source     # fish
+Install once in your shell rc (use the binary you intend to run):
+  eval "$(/path/to/gwt shell-init zsh)"     # zsh / bash
+  /path/to/gwt shell-init fish | source     # fish
 
-Use --name when the binary is installed under a different name (e.g. oldgwt).`
+Re-run shell-init after every install or go install. Use --bin to override the
+pinned path. Use --name when the binary is installed under a different name.`
 
-	shellInitExample = `  eval "$(gwt shell-init zsh)"
+	shellInitExample = `  eval "$(~/go/bin/gwt shell-init zsh)"
+  bash scripts/install.sh
   eval "$(gwt shell-init zsh --name oldgwt)"`
 
 	stLong = `Run git status -sb in the current worktree.
@@ -173,4 +177,11 @@ Same output as gwt --version.`
 
 	versionExample = `  gwt version
   gwt --version`
+
+	doctorLong = `Check for common setup problems: stale gwt binaries on PATH and
+how to refresh shell integration.
+
+Run this when Cursor worktree setup appears to hang after confirming with y.`
+
+	doctorExample = `  gwt doctor`
 )

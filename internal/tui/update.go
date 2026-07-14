@@ -277,8 +277,12 @@ func (m *model) handlePromptKey(k KeyMsg) (Model, Cmd) {
 
 func (m *model) handleConfirmKey(k KeyMsg) (Model, Cmd) {
 	s := k.String()
+	confirm := m.keys.confirm.matches(s) ||
+		k.Type == keyEnter ||
+		m.keys.remove.matches(s) ||
+		m.keys.removeD.matches(s)
 	switch {
-	case m.keys.confirm.matches(s):
+	case confirm:
 		ri := m.confirmTgt
 		kind := m.confirmKind
 		m.mode = modeList

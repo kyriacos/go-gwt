@@ -150,9 +150,9 @@ func (r *Runner) RunCursorSetup(ctx context.Context, newPath, root string, decis
 			ui.Dim("Skipped Cursor setup-worktree commands.")
 			return nil
 		}
-		ui.ResetTTY()
 		ui.Dim("Running setup-worktree from .cursor/worktrees.json ... (Ctrl+C to cancel)")
 		r.runCursorSetupSteps(ctx, steps, root)
+		ui.Dim("Setup finished.")
 		return nil
 	}
 
@@ -268,7 +268,7 @@ func (r *Runner) runCursorSetupSteps(ctx context.Context, steps []cursorSetupSte
 		ui.Dim("  $ %s", step.display)
 		var err error
 		if step.script {
-			err = r.runSetupCommand(ctx, step.cwd, "sh", step.cmd)
+			err = r.runSetupCommand(ctx, step.cwd, "bash", step.cmd)
 		} else {
 			err = r.runSetupCommand(ctx, step.cwd, "sh", "-c", step.cmd)
 		}
@@ -280,25 +280,16 @@ func (r *Runner) runCursorSetupSteps(ctx context.Context, steps []cursorSetupSte
 
 // ttyRunner is implemented by the production exec.Cmd runner.
 type ttyRunner interface {
-	RunTTY(ctx context.Context, dir, name string, args ...string) error
+	RunInteractive(ctx context.Context, dir, name string, args ...string) error
+	RunLogged(ctx context.Context, dir, name string, args ...string) error
 }
 
-// runSetupCommand executes a setup step. When a controlling terminal exists and
-// the injected runner supports it, stdout/stderr attach to /dev/tty so
-// long-running scripts (e.g. npm install) show live progress; stdin stays on
-// /dev/null so Enter cannot interrupt the script (Ctrl+C still can). CI-style
-// env vars are set so package managers do not stall waiting for confirmation on
-// the tty. The shell wrapper captures gwt's stdout for cd, so setup output must
-// not go there. Fake runners and environments without a tty fall back to
-// buffered execution.
+// runSetupCommand runs a setup step. When GWT_PATH_OUT is set (shell wrapper),
+// stdin/stdout/stderr are inherited so setup behaves exactly like running the
+// script by hand. Otherwise output is logged to stderr and stdin is closed.
 func (r *Runner) runSetupCommand(ctx context.Context, dir, name string, args ...string) error {
-	return withNonInteractiveEnv(func() error {
-		if ui.HasTTY() {
-			if tr, ok := r.Run.(ttyRunner); ok {
-				return tr.RunTTY(ctx, dir, name, args...)
-			}
-		}
-
+	tr, ok := r.Run.(ttyRunner)
+	if !ok {
 		stdout, stderr, err := r.Run.Run(ctx, dir, name, args...)
 		if len(stdout) > 0 {
 			ui.Dim("%s", string(stdout))
@@ -307,40 +298,11 @@ func (r *Runner) runSetupCommand(ctx context.Context, dir, name string, args ...
 			ui.Dim("%s", string(stderr))
 		}
 		return err
-	})
-}
-
-// withNonInteractiveEnv sets common non-interactive env vars for the duration of
-// fn so package managers do not block on /dev/tty prompts while stdin is closed.
-func withNonInteractiveEnv(fn func() error) error {
-	type envVal struct {
-		had bool
-		val string
 	}
-	overrides := map[string]string{
-		"CI":                  "1",
-		"PNPM_NO_INTERACTIVE": "1",
-		"npm_config_yes":      "true",
-		"npm_config_fund":     "false",
-		"npm_config_audit":    "false",
+	if os.Getenv(ui.PathOutEnv) != "" {
+		return tr.RunInteractive(ctx, dir, name, args...)
 	}
-	prev := make(map[string]envVal, len(overrides))
-	for k, v := range overrides {
-		if cur, ok := os.LookupEnv(k); ok {
-			prev[k] = envVal{had: true, val: cur}
-		}
-		_ = os.Setenv(k, v)
-	}
-	defer func() {
-		for k := range overrides {
-			if p, ok := prev[k]; ok {
-				_ = os.Setenv(k, p.val)
-			} else {
-				_ = os.Unsetenv(k)
-			}
-		}
-	}()
-	return fn()
+	return tr.RunLogged(ctx, dir, name, args...)
 }
 
 // runCommands executes each command in cwd via `sh -c`, with ROOT_WORKTREE_PATH

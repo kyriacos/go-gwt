@@ -1,53 +1,48 @@
 # gwt shell integration (zsh)
 #
 # A process cannot change its parent shell's working directory, so the switch
-# verbs (new|from|co|checkout|search|pick and the bare dashboard) print the
-# chosen worktree path to stdout. This wrapper captures that path and cd's
-# there. Everything else (diagnostics, prompts, the TUI) is written to the tty
-# by gwt itself, so it is left untouched.
+# verbs (new|from|co|checkout|search|pick and the bare dashboard) write the
+# chosen worktree path to a temp file (GWT_PATH_OUT). This avoids capturing
+# stdout in command substitution, which breaks Cursor setup (uv/pnpm) progress.
 #
-# If gwt instead prints a line beginning with "GWT_POPULATE:" (used by from/co
-# with no argument to suggest a command for review), the remainder is pushed
-# into the line editor via `print -z` so you can edit it before running.
+# _GWT_BIN is set by shell-init to the binary that generated this script.
 #
-# Install with:  eval "$(gwt shell-init zsh)"
+# Install with:  eval "$(/path/to/gwt shell-init zsh)"
+_gwt_cd_from() {
+  local pathfile content
+  pathfile="$(mktemp "${TMPDIR:-/tmp}/gwt-path.XXXXXX")" || return 1
+  GWT_PATH_OUT="$pathfile" "$_GWT_BIN" "$@" || { rm -f "$pathfile"; return; }
+  [[ -f "$pathfile" ]] || return 0
+  content="$(<"$pathfile")"
+  rm -f "$pathfile"
+  [[ -z "$content" ]] && return 0
+  if [[ "$content" == GWT_POPULATE:* ]]; then
+    print -z -- "${content#GWT_POPULATE:}"
+  else
+    builtin cd -- "${content%%$'\n'*}"
+    if [[ -n ${GWT_AUTO_LS:-} ]]; then
+      "$_GWT_BIN" ls
+    fi
+  fi
+}
+
 gwt() {
   case "$1" in
     new|from|co|checkout|search|pick|dashboard)
       local a
       for a in "$@"; do
         if [[ "$a" == -h || "$a" == --help ]]; then
-          command gwt "$@"
+          "$_GWT_BIN" "$@"
           return
         fi
       done
-      local out
-      out="$(command gwt "$@")" || return
-      if [[ -z "$out" ]]; then
-        return
-      fi
-      if [[ "$out" == GWT_POPULATE:* ]]; then
-        print -z -- "${out#GWT_POPULATE:}"
-      else
-        builtin cd -- "${out##*$'\n'}"
-        if [[ -n ${GWT_AUTO_LS:-} ]]; then
-          command gwt ls
-        fi
-      fi
+      _gwt_cd_from "$@"
       ;;
     "")
-      # Bare invocation: dashboard. It prints the selected path on stdout.
-      local out
-      out="$(command gwt)" || return
-      if [[ -n "$out" ]]; then
-        builtin cd -- "${out##*$'\n'}"
-        if [[ -n ${GWT_AUTO_LS:-} ]]; then
-          command gwt ls
-        fi
-      fi
+      _gwt_cd_from
       ;;
     *)
-      command gwt "$@"
+      "$_GWT_BIN" "$@"
       ;;
   esac
 }

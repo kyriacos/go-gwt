@@ -35,12 +35,21 @@ func (Cmd) Run(ctx context.Context, dir, name string, args ...string) ([]byte, [
 	return out.Bytes(), errb.Bytes(), err
 }
 
-// RunTTY runs a command with stdout/stderr attached to /dev/tty when available
-// so progress is visible while gwt's stdout is captured by the shell wrapper.
-// Stdin is attached to /dev/null so stray Enter cannot interrupt setup; use
-// Ctrl+C. When /dev/tty is unavailable, both streams go to stderr — never to
-// stdout, which may be a pipe that would block once full.
-func (Cmd) RunTTY(ctx context.Context, dir, name string, args ...string) error {
+// RunInteractive runs a command with the process stdin/stdout/stderr attached
+// to the terminal — the same as running the script by hand. Used for worktree
+// setup when the shell wrapper passes GWT_PATH_OUT so stdout stays free.
+func (Cmd) RunInteractive(ctx context.Context, dir, name string, args ...string) error {
+	c := osexec.CommandContext(ctx, name, args...)
+	c.Dir = dir
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return c.Run()
+}
+
+// RunLogged runs a command with stdout/stderr streamed to the terminal stderr.
+// Stdin is /dev/null. Used when stdout must stay clean for the cd path line.
+func (Cmd) RunLogged(ctx context.Context, dir, name string, args ...string) error {
 	c := osexec.CommandContext(ctx, name, args...)
 	c.Dir = dir
 	devNull, err := os.Open(os.DevNull)
@@ -50,15 +59,7 @@ func (Cmd) RunTTY(ctx context.Context, dir, name string, args ...string) error {
 		c.Stdin = devNull
 		defer devNull.Close()
 	}
-	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
-	if err == nil {
-		defer tty.Close()
-		c.Stdout = tty
-		c.Stderr = tty
-	} else {
-		c.Stdout = os.Stderr
-		c.Stderr = os.Stderr
-	}
-	err = c.Run()
-	return err
+	c.Stdout = os.Stderr
+	c.Stderr = os.Stderr
+	return c.Run()
 }

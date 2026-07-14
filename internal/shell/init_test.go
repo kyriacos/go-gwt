@@ -5,23 +5,27 @@ import (
 	"testing"
 )
 
+const testBin = "/opt/homebrew/bin/gwt"
+
 func TestInitSupportedShells(t *testing.T) {
 	for _, sh := range Shells() {
 		t.Run(sh, func(t *testing.T) {
-			script, err := Init(sh, "gwt")
+			script, err := Init(sh, "gwt", testBin)
 			if err != nil {
 				t.Fatalf("Init(%q) returned error: %v", sh, err)
 			}
 			if strings.TrimSpace(script) == "" {
 				t.Fatalf("Init(%q) returned empty script", sh)
 			}
+			if !strings.Contains(script, testBin) {
+				t.Errorf("Init(%q) script does not pin binary path %q", sh, testBin)
+			}
 			if !strings.Contains(script, "gwt") {
 				t.Errorf("Init(%q) script does not mention the gwt function", sh)
 			}
-			if !strings.Contains(script, "GWT_POPULATE:") {
-				t.Errorf("Init(%q) script does not handle GWT_POPULATE:", sh)
+			if !strings.Contains(script, "GWT_PATH_OUT") {
+				t.Errorf("Init(%q) script does not use GWT_PATH_OUT cd protocol", sh)
 			}
-			// The switch verbs that drive the cd protocol must be present.
 			for _, verb := range []string{"new", "from", "co", "checkout", "search", "pick"} {
 				if !strings.Contains(script, verb) {
 					t.Errorf("Init(%q) script missing switch verb %q", sh, verb)
@@ -41,7 +45,7 @@ func TestInitDefinesFunction(t *testing.T) {
 		"fish": "function gwt",
 	}
 	for sh, want := range cases {
-		script, err := Init(sh, "gwt")
+		script, err := Init(sh, "gwt", testBin)
 		if err != nil {
 			t.Fatalf("Init(%q): %v", sh, err)
 		}
@@ -52,10 +56,10 @@ func TestInitDefinesFunction(t *testing.T) {
 }
 
 func TestInitUnknownShell(t *testing.T) {
-	if _, err := Init("powershell", "gwt"); err == nil {
+	if _, err := Init("powershell", "gwt", testBin); err == nil {
 		t.Fatal("Init(\"powershell\") expected an error, got nil")
 	}
-	if _, err := Init("", "gwt"); err == nil {
+	if _, err := Init("", "gwt", testBin); err == nil {
 		t.Fatal("Init(\"\") expected an error, got nil")
 	}
 }
@@ -63,17 +67,16 @@ func TestInitUnknownShell(t *testing.T) {
 func TestInitCustomName(t *testing.T) {
 	wantFn := map[string]string{"zsh": "oldgwt() {", "bash": "oldgwt() {", "fish": "function oldgwt"}
 	for _, sh := range Shells() {
-		script, err := Init(sh, "oldgwt")
+		script, err := Init(sh, "oldgwt", testBin)
 		if err != nil {
 			t.Fatalf("Init(%q, oldgwt): %v", sh, err)
 		}
 		if !strings.Contains(script, wantFn[sh]) {
 			t.Errorf("Init(%q, oldgwt) missing renamed function %q", sh, wantFn[sh])
 		}
-		if !strings.Contains(script, "command oldgwt") {
-			t.Errorf("Init(%q, oldgwt) does not invoke `command oldgwt`", sh)
+		if !strings.Contains(script, testBin) {
+			t.Errorf("Init(%q, oldgwt) does not pin binary path", sh)
 		}
-		// The GWT_POPULATE sentinel is uppercase and must survive the rename.
 		if !strings.Contains(script, "GWT_POPULATE:") {
 			t.Errorf("Init(%q, oldgwt) mangled GWT_POPULATE sentinel", sh)
 		}

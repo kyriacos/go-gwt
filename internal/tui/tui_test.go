@@ -221,6 +221,55 @@ func TestEnterSelectsAndQuits(t *testing.T) {
 	}
 }
 
+func TestConfirmDeleteKeyConfirms(t *testing.T) {
+	t.Parallel()
+	m, acts := newTestModel(false)
+	m.seed(t)
+	m.moveCursor(1)
+
+	next, _ := m.Update(rk("d"))
+	m = next.(*model)
+	if m.mode != modeConfirm {
+		t.Fatalf("want modeConfirm, got %v", m.mode)
+	}
+
+	next, cmd := m.Update(rk("d"))
+	m = next.(*model)
+	if cmd == nil {
+		t.Fatal("expected remove Cmd on confirm d")
+	}
+	cmd()
+
+	acts.mu.Lock()
+	defer acts.mu.Unlock()
+	if len(acts.removed) != 1 || acts.removed[0] != "/repo-feature" {
+		t.Fatalf("Remove not called correctly: %v", acts.removed)
+	}
+}
+
+func TestConfirmEnterConfirms(t *testing.T) {
+	t.Parallel()
+	m, acts := newTestModel(false)
+	m.seed(t)
+	m.moveCursor(1)
+
+	next, _ := m.Update(rk("d"))
+	m = next.(*model)
+
+	next, cmd := m.Update(KeyMsg{Type: keyEnter})
+	m = next.(*model)
+	if cmd == nil {
+		t.Fatal("expected remove Cmd on confirm enter")
+	}
+	cmd()
+
+	acts.mu.Lock()
+	defer acts.mu.Unlock()
+	if len(acts.removed) != 1 {
+		t.Fatalf("Remove not called: %v", acts.removed)
+	}
+}
+
 func TestRemoveOpensModalAndConfirmCallsActions(t *testing.T) {
 	t.Parallel()
 	m, acts := newTestModel(false)

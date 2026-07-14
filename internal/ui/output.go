@@ -5,6 +5,13 @@ import (
 	"os"
 )
 
+// PathOutEnv is set by the shell wrapper so gwt can emit the cd path without
+// stdout being captured in command substitution (which breaks setup progress).
+const PathOutEnv = "GWT_PATH_OUT"
+
+// pathOutEnv is the legacy unexported alias used within this package.
+const pathOutEnv = PathOutEnv
+
 // Err prints a diagnostic line to stderr.
 func Err(format string, a ...any) {
 	fmt.Fprintln(os.Stderr, fmt.Sprintf(format, a...))
@@ -36,16 +43,25 @@ func Dim(format string, a ...any) {
 	fmt.Fprintln(os.Stderr, render(styleDim, fmt.Sprintf(format, a...)))
 }
 
-// Path prints a worktree path to stdout. This is the machine-readable contract
-// the shell wrapper reads to cd; it must be the only thing on stdout.
-func Path(p string) {
-	fmt.Fprintln(os.Stdout, p)
+func writeMachineLine(line string) {
+	if out := os.Getenv(pathOutEnv); out != "" {
+		_ = os.WriteFile(out, []byte(line), 0o600)
+		return
+	}
+	fmt.Fprint(os.Stdout, line)
 }
 
-// Populate prints a GWT_POPULATE line to stdout so the shell wrapper can park
-// the suggested command in the line buffer for review before running.
+// Path emits the worktree path for the shell wrapper to cd. When GWT_PATH_OUT
+// is set, the path is written there instead of stdout so long-running setup can
+// stream to the terminal while the wrapper waits.
+func Path(p string) {
+	writeMachineLine(p + "\n")
+}
+
+// Populate emits a GWT_POPULATE line so the shell wrapper can park the
+// suggested command in the line buffer for review before running.
 func Populate(cmd string) {
-	fmt.Fprintf(os.Stdout, "GWT_POPULATE:%s\n", cmd)
+	writeMachineLine("GWT_POPULATE:" + cmd + "\n")
 }
 
 // Bold returns text styled bold (no-op when color is disabled).

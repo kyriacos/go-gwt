@@ -1,40 +1,43 @@
 # gwt shell integration (fish)
 #
-# A process cannot change its parent shell's working directory, so the switch
-# verbs (new|from|co|checkout|search|pick and the bare dashboard) print the
-# chosen worktree path to stdout. This wrapper captures that path and cd's
-# there. Everything else (diagnostics, prompts, the TUI) is written to the tty
-# by gwt itself, so it is left untouched.
-#
-# If gwt instead prints a line beginning with "GWT_POPULATE:" (used by from/co
-# with no argument to suggest a command for review), the remainder is inserted
-# into the command line with `commandline` so you can edit it before running.
+# GWT_BIN is set by shell-init. Switch verbs use GWT_PATH_OUT so stdout is not
+# captured in command substitution (which breaks long-running setup scripts).
 #
 # Install with:  gwt shell-init fish | source
+function _gwt_cd_from
+    set -l pathfile (mktemp "$TMPDIR/gwt-path.XXXXXX")
+    or return 1
+    set -lx GWT_PATH_OUT $pathfile
+    $GWT_BIN $argv
+    or begin; rm -f $pathfile; return; end
+    test -f $pathfile
+    or return 0
+    set -l content (cat $pathfile)
+    rm -f $pathfile
+    test -n "$content"
+    or return 0
+    if string match -q 'GWT_POPULATE:*' -- "$content"
+        commandline -r -- (string replace 'GWT_POPULATE:' '' -- "$content")
+    else
+        set -l path (string trim -- "$content")
+        builtin cd -- "$path"
+        if test -n "$GWT_AUTO_LS"
+            $GWT_BIN ls
+        end
+    end
+end
+
 function gwt
     switch "$argv[1]"
         case new from co checkout search pick dashboard ''
             for a in $argv
                 if test "$a" = -h -o "$a" = --help
-                    command gwt $argv
+                    $GWT_BIN $argv
                     return
                 end
             end
-            set -l out (command gwt $argv)
-            or return
-            if test -z "$out"
-                return
-            end
-            set -l last $out[-1]
-            if string match -q 'GWT_POPULATE:*' -- "$last"
-                commandline -r -- (string replace 'GWT_POPULATE:' '' -- "$last")
-            else
-                builtin cd -- "$last"
-                if test -n "$GWT_AUTO_LS"
-                    command gwt ls
-                end
-            end
+            _gwt_cd_from $argv
         case '*'
-            command gwt $argv
+            $GWT_BIN $argv
     end
 end

@@ -6,12 +6,8 @@ import (
 	"strings"
 )
 
-// Confirm asks a yes/no question on the controlling terminal and returns the
-// answer. The prompt is written to /dev/tty (not stdout, which is reserved for
-// paths). When no terminal is available it returns def without prompting, so
-// callers behave sanely under `cd "$(gwt ...)"` and in CI.
+// Confirm asks a yes/no question on stderr and reads the answer from /dev/tty.
 func Confirm(question string, def bool) bool {
-	ResetTTY()
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
 		return def
@@ -22,15 +18,21 @@ func Confirm(question string, def bool) bool {
 	if def {
 		suffix = "[Y/n]"
 	}
-	fmt.Fprintf(tty, "%s %s ", render(styleWarn, question), suffix)
+	fmt.Fprintf(os.Stderr, "%s %s ", render(styleWarn, question), suffix)
 
 	line, err := ReadTTYLine(tty)
 	if err != nil && line == "" {
 		return def
 	}
+	if line != "" {
+		fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(line))
+	}
+	return parseConfirm(line, def)
+}
+
+func parseConfirm(line string, def bool) bool {
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
-		DrainTTY()
 		return true
 	case "n", "no":
 		return false

@@ -11,13 +11,23 @@ land as siblings of your repo (`~/code/backend` → `~/code/backend-feature`).
 
 ## Install
 
+From a clone (recommended for development):
+
+```sh
+bash scripts/install.sh
+```
+
+That installs to `$(go env GOPATH)/bin/gwt`, prints `gwt version`, and reminds you to refresh shell integration (below).
+
+Release install:
+
 ```sh
 go install github.com/kyriacos/go-gwt/cmd/gwt@latest
 ```
 
-From a clone: `go install ./cmd/gwt` (installs `gwt` into `$(go env GOPATH)/bin`).
-To overwrite a binary in `~/.local/bin`: `GOBIN=~/.local/bin go install ./cmd/gwt`.
-If an older `gwt` is already on your `PATH`, remove it or put `$(go env GOPATH)/bin` first.
+Manual install from a clone: `go install ./cmd/gwt`. To overwrite a binary in `~/.local/bin`: `GOBIN=~/.local/bin go install ./cmd/gwt`.
+
+**After every install**, re-run shell integration so the wrapper pins the binary you just built — see [Shell integration](#shell-integration). `gwt version` shows which binary is running (`binary: …`); if it does not match your install path, refresh shell-init or remove a stale copy on `PATH` (e.g. `~/.local/bin/gwt`).
 
 Prebuilt binaries: [releases](https://github.com/kyriacos/go-gwt/releases).
 
@@ -59,13 +69,20 @@ Interactive pickers use the built-in TUI by default (branch log preview, dashboa
 
 ## Shell integration
 
-Add to `~/.zshrc` (or bash/fish equivalent):
+The shell wrapper pins the absolute path of the `gwt` binary that generated it
+(`_GWT_BIN`), so `command gwt` cannot silently pick up a stale copy elsewhere
+on `PATH`. Switch verbs pass the cd target via `GWT_PATH_OUT` (not stdout
+capture) so Cursor setup can stream progress while the wrapper waits.
+**Re-run shell-init after every `go install` or `scripts/install.sh`.**
+
+Add to `~/.zshrc` (or bash/fish equivalent). Use the binary you intend to run:
 
 ```sh
-eval "$(gwt shell-init zsh)"
+eval "$(~/go/bin/gwt shell-init zsh)"
 ```
 
 After that, `gwt co` / `gwt new` / `gwt search` drop you into the chosen worktree.
+Check `gwt version` — the `binary:` line should match the path above.
 
 ```sh
 export GWT_AUTO_LS=1          # run gwt ls after each switch

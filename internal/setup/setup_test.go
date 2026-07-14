@@ -243,7 +243,7 @@ func TestRunCursorSetup_RunsScriptFromWorktreeRoot(t *testing.T) {
 		t.Fatalf("RunCursorSetup: %v", err)
 	}
 	wantDir := newPath
-	wantCall := exec.Key("sh", filepath.Join(".cursor", "setup-worktree-unix.sh"))
+	wantCall := exec.Key("bash", filepath.Join(".cursor", "setup-worktree-unix.sh"))
 	if len(f.Calls) != 1 || f.Calls[0] != wantCall {
 		t.Fatalf("calls = %v, want [%q]", f.Calls, wantCall)
 	}

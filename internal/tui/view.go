@@ -101,7 +101,7 @@ func (m *model) confirmModalContent() string {
 	}
 	return st.modalDanger.Render(verb) + "\n\n" +
 		fmt.Sprintf("Target: %s\n\n", target) +
-		st.help.Render("y confirm  n/esc cancel")
+		st.help.Render("y/d/enter confirm  n/esc cancel")
 }
 
 func (m *model) viewPRBody() string {
