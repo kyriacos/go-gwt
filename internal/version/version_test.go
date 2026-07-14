@@ -6,7 +6,6 @@ import (
 )
 
 func TestShortCommit(t *testing.T) {
-	t.Parallel()
 	orig := Commit
 	t.Cleanup(func() { Commit = orig })
 
@@ -25,7 +24,6 @@ func TestShortCommit(t *testing.T) {
 }
 
 func TestStringFormat(t *testing.T) {
-	t.Parallel()
 	origV, origC, origD := Version, Commit, Date
 	t.Cleanup(func() {
 		Version, Commit, Date = origV, origC, origD
@@ -40,7 +38,6 @@ func TestStringFormat(t *testing.T) {
 }
 
 func TestShortFormat(t *testing.T) {
-	t.Parallel()
 	origV, origC := Version, Commit
 	t.Cleanup(func() {
 		Version, Commit = origV, origC

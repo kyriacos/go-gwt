@@ -318,11 +318,11 @@ func withNonInteractiveEnv(fn func() error) error {
 		val string
 	}
 	overrides := map[string]string{
-		"CI":                    "1",
-		"PNPM_NO_INTERACTIVE":   "1",
-		"npm_config_yes":        "true",
-		"npm_config_fund":       "false",
-		"npm_config_audit":      "false",
+		"CI":                  "1",
+		"PNPM_NO_INTERACTIVE": "1",
+		"npm_config_yes":      "true",
+		"npm_config_fund":     "false",
+		"npm_config_audit":    "false",
 	}
 	prev := make(map[string]envVal, len(overrides))
 	for k, v := range overrides {

@@ -33,41 +33,41 @@ func (b binding) matches(s string) bool {
 
 // keyMap is the full set of dashboard bindings.
 type keyMap struct {
-	up      binding
-	down    binding
-	enter   binding
-	filter  binding
-	refresh binding
-	newWT   binding
-	remove  binding
-	removeD binding
-	pr      binding
-	open    binding
-	help    binding
+	up        binding
+	down      binding
+	enter     binding
+	filter    binding
+	refresh   binding
+	newWT     binding
+	remove    binding
+	removeD   binding
+	pr        binding
+	open      binding
+	help      binding
 	changelog binding
-	quit    binding
-	confirm binding // y in modal
-	cancel  binding // n/esc in modal
+	quit      binding
+	confirm   binding // y in modal
+	cancel    binding // n/esc in modal
 }
 
 // defaultKeyMap builds the bindings. ghAvailable gates the PR binding.
 func defaultKeyMap(ghAvailable bool) keyMap {
 	return keyMap{
-		up:      newBinding("↑/k", "up", true, "up", "k"),
-		down:    newBinding("↓/j", "down", true, "down", "j"),
-		enter:   newBinding("enter", "select", true, "enter"),
-		filter:  newBinding("/", "filter", true, "/"),
-		refresh: newBinding("r", "refresh", true, "r"),
-		newWT:   newBinding("n", "new", true, "n"),
-		remove:  newBinding("d", "remove", true, "d"),
-		removeD: newBinding("D", "remove+branch", true, "D"),
-		pr:      newBinding("p", "PRs", ghAvailable, "p"),
+		up:        newBinding("↑/k", "up", true, "up", "k"),
+		down:      newBinding("↓/j", "down", true, "down", "j"),
+		enter:     newBinding("enter", "select", true, "enter"),
+		filter:    newBinding("/", "filter", true, "/"),
+		refresh:   newBinding("r", "refresh", true, "r"),
+		newWT:     newBinding("n", "new", true, "n"),
+		remove:    newBinding("d", "remove", true, "d"),
+		removeD:   newBinding("D", "remove+branch", true, "D"),
+		pr:        newBinding("p", "PRs", ghAvailable, "p"),
 		open:      newBinding("o", "open", true, "o"),
 		help:      newBinding("?", "help", true, "?"),
 		changelog: newBinding("c", "changelog", true, "c"),
 		quit:      newBinding("q", "quit", true, "q", "esc"),
-		confirm: newBinding("y", "yes", true, "y"),
-		cancel:  newBinding("n", "no", true, "n", "esc"),
+		confirm:   newBinding("y", "yes", true, "y"),
+		cancel:    newBinding("n", "no", true, "n", "esc"),
 	}
 }
 

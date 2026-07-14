@@ -49,11 +49,11 @@ type styles struct {
 	warnText lipgloss.Style
 
 	// modal / prompt
-	modal       lipgloss.Style
-	modalTitle  lipgloss.Style
-	modalDanger lipgloss.Style
-	prompt      lipgloss.Style
-	scrim       lipgloss.Style // dimmed full-screen backdrop
+	modal        lipgloss.Style
+	modalTitle   lipgloss.Style
+	modalDanger  lipgloss.Style
+	prompt       lipgloss.Style
+	scrim        lipgloss.Style // dimmed full-screen backdrop
 	overlayModal lipgloss.Style // centered modal panel
 
 	// pr view

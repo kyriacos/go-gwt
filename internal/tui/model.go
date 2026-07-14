@@ -58,13 +58,13 @@ type row struct {
 type mode int
 
 const (
-	modeList    mode = iota // browsing the worktree list
-	modeFilter              // typing in the filter box
-	modePrompt              // typing a new-worktree branch name
-	modeConfirm             // destructive-action confirmation modal
-	modePR                  // PR list
-	modeHelp                // full-screen help overlay
-	modeChangelog           // scrollable changelog overlay
+	modeList      mode = iota // browsing the worktree list
+	modeFilter                // typing in the filter box
+	modePrompt                // typing a new-worktree branch name
+	modeConfirm               // destructive-action confirmation modal
+	modePR                    // PR list
+	modeHelp                  // full-screen help overlay
+	modeChangelog             // scrollable changelog overlay
 )
 
 // pendingAction records what a confirm modal will do when accepted.
@@ -111,8 +111,8 @@ type model struct {
 
 	width, height int
 
-	statusMsg    string // transient one-line message (errors, results)
-	scrollOffset int    // changelog scroll position (lines from top)
+	statusMsg       string // transient one-line message (errors, results)
+	scrollOffset    int    // changelog scroll position (lines from top)
 	overlayBackdrop string // frozen dashboard frame behind a modal
 
 	// result + exit
